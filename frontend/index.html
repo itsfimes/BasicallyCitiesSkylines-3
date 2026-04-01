@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CitySim Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>CitySim Control Room</h1>
+      <p>Real-time scenario testing for transport, weather, events, and outages</p>
+    </header>
+
+    <main>
+      <section class="controls">
+        <button id="step1">Step +1 min</button>
+        <button id="step10">Step +10 min</button>
+        <button id="run60">Run +60 min</button>
+        <button id="reset">Reset</button>
+      </section>
+
+      <section class="metrics">
+        <article>
+          <h2>Traffic Density</h2>
+          <div id="trafficDensity">-</div>
+        </article>
+        <article>
+          <h2>Avg Delay (min)</h2>
+          <div id="avgDelay">-</div>
+        </article>
+        <article>
+          <h2>Emissions (kg CO₂)</h2>
+          <div id="emissions">-</div>
+        </article>
+        <article>
+          <h2>Energy (kWh)</h2>
+          <div id="energy">-</div>
+        </article>
+      </section>
+
+      <section class="map-wrap">
+        <h2>Network</h2>
+        <svg id="map" viewBox="0 0 900 500"></svg>
+      </section>
+
+      <section class="events">
+        <h2>Inject Event</h2>
+        <form id="eventForm">
+          <input name="event_id" placeholder="event_id" required />
+          <select name="event_type">
+            <option value="accident">accident</option>
+            <option value="road_closure">road_closure</option>
+            <option value="concert">concert</option>
+            <option value="extreme_weather">extreme_weather</option>
+            <option value="outage">outage</option>
+          </select>
+          <input name="duration_minutes" type="number" value="30" min="1" required />
+          <input name="key" placeholder="payload key (edge_id/node_id/weather)" />
+          <input name="value" placeholder="payload value" />
+          <button type="submit">Inject</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="main.js" type="module"></script>
+  </body>
+</html>

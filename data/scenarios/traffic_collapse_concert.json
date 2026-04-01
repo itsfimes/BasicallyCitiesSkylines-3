@@ -1,0 +1,40 @@
+{
+  "scenario_name": "traffic_collapse_during_concert",
+  "events": [
+    {
+      "event_id": "ev_accident_1",
+      "event_type": "accident",
+      "start_minute": 20,
+      "duration_minutes": 40,
+      "payload": {"edge_id": "e2", "extra_load": 120}
+    },
+    {
+      "event_id": "ev_road_closure_1",
+      "event_type": "road_closure",
+      "start_minute": 35,
+      "duration_minutes": 30,
+      "payload": {"edge_id": "e7"}
+    },
+    {
+      "event_id": "ev_concert_1",
+      "event_type": "concert",
+      "start_minute": 45,
+      "duration_minutes": 120,
+      "payload": {"node_id": "n2", "extra_load": 160}
+    },
+    {
+      "event_id": "ev_weather_1",
+      "event_type": "extreme_weather",
+      "start_minute": 55,
+      "duration_minutes": 50,
+      "payload": {"weather": "storm"}
+    },
+    {
+      "event_id": "ev_outage_1",
+      "event_type": "outage",
+      "start_minute": 70,
+      "duration_minutes": 25,
+      "payload": {"global_extra_load": 30}
+    }
+  ]
+}

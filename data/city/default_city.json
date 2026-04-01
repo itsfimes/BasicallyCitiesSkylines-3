@@ -1,0 +1,28 @@
+{
+  "nodes": [
+    {"node_id": "n1", "x": 14.4200, "y": 50.0870},
+    {"node_id": "n2", "x": 14.4250, "y": 50.0875},
+    {"node_id": "n3", "x": 14.4300, "y": 50.0880},
+    {"node_id": "n4", "x": 14.4340, "y": 50.0860},
+    {"node_id": "n5", "x": 14.4280, "y": 50.0845},
+    {"node_id": "n6", "x": 14.4220, "y": 50.0840}
+  ],
+  "edges": [
+    {"edge_id": "e1", "source": "n1", "target": "n2", "distance_m": 420, "lanes": 2, "base_speed_kph": 45, "capacity_per_minute": 30, "quality": 0.95},
+    {"edge_id": "e2", "source": "n2", "target": "n3", "distance_m": 390, "lanes": 2, "base_speed_kph": 50, "capacity_per_minute": 32, "quality": 0.95},
+    {"edge_id": "e3", "source": "n3", "target": "n4", "distance_m": 500, "lanes": 2, "base_speed_kph": 40, "capacity_per_minute": 26, "quality": 0.85},
+    {"edge_id": "e4", "source": "n4", "target": "n5", "distance_m": 450, "lanes": 1, "base_speed_kph": 35, "capacity_per_minute": 18, "quality": 0.8},
+    {"edge_id": "e5", "source": "n5", "target": "n6", "distance_m": 390, "lanes": 1, "base_speed_kph": 35, "capacity_per_minute": 18, "quality": 0.8},
+    {"edge_id": "e6", "source": "n6", "target": "n1", "distance_m": 360, "lanes": 1, "base_speed_kph": 30, "capacity_per_minute": 15, "quality": 0.75},
+    {"edge_id": "e7", "source": "n2", "target": "n5", "distance_m": 640, "lanes": 1, "base_speed_kph": 30, "capacity_per_minute": 14, "quality": 0.75},
+    {"edge_id": "e8", "source": "n5", "target": "n2", "distance_m": 640, "lanes": 1, "base_speed_kph": 30, "capacity_per_minute": 14, "quality": 0.75},
+    {"edge_id": "e9", "source": "n6", "target": "n3", "distance_m": 720, "lanes": 1, "base_speed_kph": 35, "capacity_per_minute": 16, "quality": 0.82}
+  ],
+  "buildings": [
+    {"building_id": "b_home_1", "node_id": "n1", "kind": "home", "capacity": 1500},
+    {"building_id": "b_home_2", "node_id": "n6", "kind": "home", "capacity": 1200},
+    {"building_id": "b_work", "node_id": "n3", "kind": "work", "capacity": 1400},
+    {"building_id": "b_school", "node_id": "n4", "kind": "school", "capacity": 800},
+    {"building_id": "b_leisure", "node_id": "n2", "kind": "leisure", "capacity": 900}
+  ]
+}
