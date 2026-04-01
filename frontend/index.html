@@ -3,65 +3,179 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>CitySim Dashboard</title>
+    <meta name="color-scheme" content="dark" />
+    <title>CitySim Control Room</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header>
-      <h1>CitySim Control Room</h1>
-      <p>Real-time scenario testing for transport, weather, events, and outages</p>
-    </header>
+    <div class="app-shell">
+      <header class="hero panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Urban Systems Monitor</p>
+          <h1>CitySim Control Room</h1>
+          <p class="hero-text">
+            Real-time scenario testing for transport flow, weather shocks, and infrastructure
+            failures across the city network.
+          </p>
+        </div>
 
-    <main>
-      <section class="controls">
-        <button id="step1">Step +1 min</button>
-        <button id="step10">Step +10 min</button>
-        <button id="run60">Run +60 min</button>
-        <button id="reset">Reset</button>
-      </section>
+        <section class="hero-meta" aria-label="Simulation overview">
+          <article class="meta-card">
+            <span class="meta-label">Sim Time</span>
+            <strong id="simTime">T+00:00</strong>
+          </article>
+          <article class="meta-card">
+            <span class="meta-label">Weather</span>
+            <strong id="weatherState">Unknown</strong>
+          </article>
+          <article class="meta-card">
+            <span class="meta-label">Active Events</span>
+            <strong id="eventCount">0</strong>
+          </article>
+          <article class="meta-card">
+            <span class="meta-label">Residents</span>
+            <strong id="residentCount">0</strong>
+          </article>
+        </section>
+      </header>
 
-      <section class="metrics">
-        <article>
-          <h2>Traffic Density</h2>
-          <div id="trafficDensity">-</div>
-        </article>
-        <article>
-          <h2>Avg Delay (min)</h2>
-          <div id="avgDelay">-</div>
-        </article>
-        <article>
-          <h2>Emissions (kg CO₂)</h2>
-          <div id="emissions">-</div>
-        </article>
-        <article>
-          <h2>Energy (kWh)</h2>
-          <div id="energy">-</div>
-        </article>
-      </section>
+      <main>
+        <section class="controls panel" aria-label="Simulation controls">
+          <div class="controls-group">
+            <button id="step1">Step +1 min</button>
+            <button id="step10">Step +10 min</button>
+            <button id="run60">Run +60 min</button>
+            <button id="reset" class="button-muted">Reset</button>
+          </div>
+          <div id="statusMessage" class="status-pill" data-state="idle" aria-live="polite">
+            Awaiting live simulation data.
+          </div>
+        </section>
 
-      <section class="map-wrap">
-        <h2>Network</h2>
-        <svg id="map" viewBox="0 0 900 500"></svg>
-      </section>
+        <section class="metrics" aria-label="Simulation metrics">
+          <article class="metric-card metric-card-density">
+            <p class="metric-kicker">Network Load</p>
+            <h2>Traffic Density</h2>
+            <div id="trafficDensity">-</div>
+            <p class="metric-note">Average congestion across all active edges.</p>
+          </article>
+          <article class="metric-card metric-card-delay">
+            <p class="metric-kicker">Reliability</p>
+            <h2>Avg Delay (min)</h2>
+            <div id="avgDelay">-</div>
+            <p class="metric-note">Mean resident delay caused by network pressure.</p>
+          </article>
+          <article class="metric-card metric-card-emissions">
+            <p class="metric-kicker">Environmental Cost</p>
+            <h2>Emissions (kg CO₂)</h2>
+            <div id="emissions">-</div>
+            <p class="metric-note">Rolling transport output from the current scenario.</p>
+          </article>
+          <article class="metric-card metric-card-energy">
+            <p class="metric-kicker">System Demand</p>
+            <h2>Energy (kWh)</h2>
+            <div id="energy">-</div>
+            <p class="metric-note">Estimated energy use across the mobility stack.</p>
+          </article>
+        </section>
 
-      <section class="events">
-        <h2>Inject Event</h2>
-        <form id="eventForm">
-          <input name="event_id" placeholder="event_id" required />
-          <select name="event_type">
-            <option value="accident">accident</option>
-            <option value="road_closure">road_closure</option>
-            <option value="concert">concert</option>
-            <option value="extreme_weather">extreme_weather</option>
-            <option value="outage">outage</option>
-          </select>
-          <input name="duration_minutes" type="number" value="30" min="1" required />
-          <input name="key" placeholder="payload key (edge_id/node_id/weather)" />
-          <input name="value" placeholder="payload value" />
-          <button type="submit">Inject</button>
-        </form>
-      </section>
-    </main>
+        <section class="dashboard-grid">
+          <section class="map-wrap panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Live Network</p>
+                <h2>Mobility Topology</h2>
+              </div>
+              <div class="map-stats" aria-label="Graph statistics">
+                <article>
+                  <span>Nodes</span>
+                  <strong id="nodeCount">-</strong>
+                </article>
+                <article>
+                  <span>Edges</span>
+                  <strong id="edgeCount">-</strong>
+                </article>
+                <article>
+                  <span>Blocked</span>
+                  <strong id="blockedCount">-</strong>
+                </article>
+              </div>
+            </div>
+
+            <div class="map-frame">
+              <svg id="map" viewBox="0 0 900 500" aria-label="City network map"></svg>
+              <div class="map-legend" aria-hidden="true">
+                <span><i class="legend-swatch legend-swatch-stable"></i> Stable</span>
+                <span><i class="legend-swatch legend-swatch-congested"></i> Congested</span>
+                <span><i class="legend-swatch legend-swatch-blocked"></i> Blocked</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="events panel">
+            <div class="section-heading section-heading-stack">
+              <div>
+                <p class="eyebrow">Scenario Injection</p>
+                <h2>Controlled Disruptions</h2>
+              </div>
+              <p class="events-intro">
+                Inject targeted incidents to pressure-test routing resilience and recovery.
+              </p>
+            </div>
+
+            <form id="eventForm" class="event-form">
+              <label class="field">
+                <span>Event ID</span>
+                <input name="event_id" placeholder="rush-hour-accident" required />
+              </label>
+
+              <label class="field">
+                <span>Event Type</span>
+                <select name="event_type">
+                  <option value="accident">accident</option>
+                  <option value="road_closure">road_closure</option>
+                  <option value="concert">concert</option>
+                  <option value="extreme_weather">extreme_weather</option>
+                  <option value="outage">outage</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Duration (minutes)</span>
+                <input name="duration_minutes" type="number" value="30" min="1" required />
+              </label>
+
+              <div class="field field-wide">
+                <span>Payload Mapping</span>
+                <div class="payload-grid">
+                  <input name="key" placeholder="payload key" />
+                  <input name="value" placeholder="payload value" />
+                </div>
+                <p id="eventHint" class="field-hint">
+                  Accident and road closure events require an <code>edge_id</code> payload.
+                </p>
+              </div>
+
+              <button type="submit" class="event-submit">Inject Event</button>
+            </form>
+
+            <section class="event-stream" aria-label="Active disruptions">
+              <div class="event-stream-header">
+                <h3>Active disruptions</h3>
+                <span id="eventCountBadge" class="count-badge">0 live</span>
+              </div>
+              <div id="activeEvents" class="event-list" aria-live="polite">No active disruptions.</div>
+            </section>
+          </section>
+        </section>
+      </main>
+    </div>
 
     <script src="main.js" type="module"></script>
   </body>
