@@ -2,10 +2,10 @@
 
 ## Chosen simulation model
 
-The system uses a discrete-time simulation with one-minute ticks.
+The system uses a discrete-time simulation with second-based ticks.
 
 Reasoning:
-- Traffic and event systems naturally map to minute-level decisions.
+- Traffic and event systems use second-level progression while preserving minute-level scenario semantics.
 - Deterministic reproducibility is easier than in wall-clock continuous simulation.
 - It supports scenario replay and comparison for decision-making.
 

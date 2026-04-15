@@ -190,6 +190,26 @@ main {
   gap: 10px;
 }
 
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.52rem 0.72rem;
+  border-radius: var(--pill-radius);
+  border: 1px solid rgba(95, 102, 92, 0.16);
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.inline-field select {
+  min-width: 84px;
+  padding: 0.48rem 0.66rem;
+  border-radius: var(--pill-radius);
+}
+
 button {
   border: 1px solid rgba(41, 101, 79, 0.2);
   border-radius: var(--pill-radius);

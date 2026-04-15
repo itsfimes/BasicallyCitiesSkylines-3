@@ -3,6 +3,14 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const API = "http://localhost:8000";
 
+const EVENT_TYPE_LABELS = {
+  accident: "Road accident",
+  road_closure: "Road closure",
+  concert: "Concert surge",
+  extreme_weather: "Extreme weather",
+  outage: "Infrastructure outage",
+};
+
 const WEATHER_PRESETS = {
   clear: {
     background: 0xcdd3c8,
@@ -45,33 +53,50 @@ const EVENT_PAYLOAD_CONFIG = {
   accident: {
     key: "edge_id",
     required: true,
-    placeholder: "e12",
-    hint: "Accident events require an `edge_id` payload.",
+    hint: "Select the edge where the road accident occurs.",
+    targetLabel: "Edge",
+    fallback: "No edges available.",
+    source: "edges",
   },
   road_closure: {
     key: "edge_id",
     required: true,
-    placeholder: "e07",
-    hint: "Road closures require an `edge_id` payload so the backend can block the route.",
+    hint: "Select the edge to close.",
+    targetLabel: "Edge",
+    fallback: "No edges available.",
+    source: "edges",
   },
   concert: {
     key: "node_id",
     required: true,
-    placeholder: "n3",
-    hint: "Concerts must target a destination node via `node_id`.",
+    hint: "Select the node where the concert surge should happen.",
+    targetLabel: "Node",
+    fallback: "No nodes available.",
+    source: "nodes",
   },
   extreme_weather: {
     key: "weather",
     required: true,
-    placeholder: "rain",
-    hint: "Extreme weather events require a `weather` payload such as rain or snow.",
+    hint: "Select the weather condition to apply.",
+    targetLabel: "Weather",
+    fallback: "No weather options available.",
+    source: "weather",
   },
   outage: {
     key: "district",
     required: false,
-    placeholder: "west-grid",
-    hint: "Outages can include an optional district or infrastructure tag.",
+    hint: "No target is required for outages.",
+    targetLabel: "Scope",
+    fallback: "No target needed.",
+    source: "none",
   },
+};
+
+const WEATHER_OPTIONS = ["rain", "storm", "snow"];
+
+const incidentState = {
+  nodes: [],
+  edges: [],
 };
 
 const trafficDensityEl = document.getElementById("trafficDensity");
@@ -98,14 +123,34 @@ const eventFormEl = document.getElementById("eventForm");
 const eventTypeEl = eventFormEl.querySelector('[name="event_type"]');
 const payloadTargetEl = eventFormEl.querySelector('[name="payload_target"]');
 const eventHintEl = document.getElementById("eventHint");
+const liveToggleEl = document.getElementById("liveToggle");
+const liveSpeedEl = document.getElementById("liveSpeed");
+
+const LIVE_BASE_TICK_MS = 1000;
+const STATE_POLL_MS = 250;
+
+const liveState = {
+  running: false,
+  pollTimerId: null,
+  polling: false,
+};
+
+const interpolationState = {
+  previousTimeSeconds: null,
+  currentTimeSeconds: null,
+  previousAtMs: null,
+  currentAtMs: null,
+};
+
+let activeRunId = 0;
+let lastAppliedTimeSeconds = -1;
 
 const sceneState = createCityScene(mapEl);
 
-document.getElementById("step1").addEventListener("click", () => step(1));
-document.getElementById("step10").addEventListener("click", () => step(10));
-document.getElementById("run60").addEventListener("click", () => step(60));
 document.getElementById("reset").addEventListener("click", resetSimulation);
 eventTypeEl.addEventListener("change", updateEventHints);
+liveToggleEl.addEventListener("click", toggleLiveMode);
+liveSpeedEl.addEventListener("change", syncRuntimeControls);
 
 eventFormEl.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -113,10 +158,12 @@ eventFormEl.addEventListener("submit", async (event) => {
   const eventType = String(form.get("event_type"));
   const config = EVENT_PAYLOAD_CONFIG[eventType] || EVENT_PAYLOAD_CONFIG.outage;
   const payloadTarget = String(form.get("payload_target") || "").trim();
+  const eventId = buildEventId(eventType, payloadTarget);
   const payload = {};
+  const eventLabel = EVENT_TYPE_LABELS[eventType] || titleCase(eventType);
 
   if (config.required && !payloadTarget) {
-    setStatus(`${config.key} is required for ${eventType}.`, "error");
+    setStatus(`Please select a ${config.targetLabel.toLowerCase()} for ${eventLabel}.`, "error");
     payloadTargetEl.reportValidity();
     payloadTargetEl.focus();
     return;
@@ -133,19 +180,179 @@ eventFormEl.addEventListener("submit", async (event) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          event_id: String(form.get("event_id")),
+          event_id: eventId,
           event_type: eventType,
           duration_minutes: Number(form.get("duration_minutes")),
           payload,
         }),
       },
-      "Injecting disruption...",
+      "Submitting incident...",
     );
     event.currentTarget.reset();
     updateEventHints();
-    await refresh("Scenario injected.");
+    await refresh("Incident injected.");
   } catch {}
 });
+
+function getTargetOptions(config) {
+  if (config.source === "nodes") {
+    return incidentState.nodes;
+  }
+  if (config.source === "edges") {
+    return incidentState.edges;
+  }
+  if (config.source === "weather") {
+    return WEATHER_OPTIONS;
+  }
+  if (config.source === "none") {
+    return [];
+  }
+  return [];
+}
+
+function populateTargetSelect(config) {
+  const options = getTargetOptions(config);
+  payloadTargetEl.innerHTML = "";
+
+  if (config.source === "none") {
+    payloadTargetEl.innerHTML = '<option value="">No target needed</option>';
+    payloadTargetEl.disabled = true;
+    payloadTargetEl.required = false;
+    return;
+  }
+
+  if (!options.length) {
+    payloadTargetEl.innerHTML = `<option value="">${escapeHtml(config.fallback)}</option>`;
+    payloadTargetEl.disabled = true;
+    payloadTargetEl.required = false;
+    return;
+  }
+
+  payloadTargetEl.disabled = false;
+  payloadTargetEl.required = config.required;
+  payloadTargetEl.innerHTML = options
+    .map((value) => `<option value="${escapeHtml(String(value))}">${escapeHtml(String(value))}</option>`)
+    .join("");
+}
+
+function buildEventId(eventType, payloadTarget) {
+  const safeTarget = String(payloadTarget || "target")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+  return `${eventType}-${safeTarget || "target"}-${Date.now()}`;
+}
+
+function getLiveTickIntervalMs() {
+  const speedMultiplier = Number(liveSpeedEl.value || 1);
+  const safeSpeed = Number.isFinite(speedMultiplier) && speedMultiplier > 0 ? speedMultiplier : 1;
+  return Math.max(80, Math.round(LIVE_BASE_TICK_MS / safeSpeed));
+}
+
+function markSnapshotArrival(simTimeSeconds) {
+  const now = performance.now();
+  if (Number.isFinite(interpolationState.currentTimeSeconds)) {
+    interpolationState.previousTimeSeconds = interpolationState.currentTimeSeconds;
+    interpolationState.previousAtMs = interpolationState.currentAtMs;
+  }
+  interpolationState.currentTimeSeconds = simTimeSeconds;
+  interpolationState.currentAtMs = now;
+
+  if (
+    !Number.isFinite(interpolationState.previousTimeSeconds) ||
+    simTimeSeconds < interpolationState.previousTimeSeconds
+  ) {
+    interpolationState.previousTimeSeconds = simTimeSeconds;
+    interpolationState.previousAtMs = now;
+  }
+}
+
+function getInterpolationAlpha() {
+  if (
+    !Number.isFinite(interpolationState.previousTimeSeconds) ||
+    !Number.isFinite(interpolationState.currentTimeSeconds)
+  ) {
+    return 1;
+  }
+
+  const simTimeDeltaSeconds = interpolationState.currentTimeSeconds - interpolationState.previousTimeSeconds;
+  if (simTimeDeltaSeconds <= 0) {
+    return 1;
+  }
+
+  const previousAtMs = Number(interpolationState.previousAtMs || interpolationState.currentAtMs || performance.now());
+  const currentAtMs = Number(interpolationState.currentAtMs || previousAtMs);
+  const speedMultiplier = Number(liveSpeedEl.value || 1);
+  const safeSpeed = Number.isFinite(speedMultiplier) && speedMultiplier > 0 ? speedMultiplier : 1;
+  const expectedIntervalMs = Math.max(80, Math.round(LIVE_BASE_TICK_MS / safeSpeed));
+  const expectedForSimDeltaMs = expectedIntervalMs * simTimeDeltaSeconds;
+  const arrivalDeltaMs = Math.max(expectedForSimDeltaMs, currentAtMs - previousAtMs);
+  const elapsedSinceCurrentMs = Math.max(0, performance.now() - currentAtMs);
+  return Math.min(1, elapsedSinceCurrentMs / arrivalDeltaMs);
+}
+
+function setLiveUiState() {
+  liveToggleEl.textContent = liveState.running ? "Pause Live" : "Resume Live";
+}
+
+async function syncRuntimeControls() {
+  const targetRunning = liveState.running;
+  try {
+    const payload = {
+      running: targetRunning,
+      speed_multiplier: Number(liveSpeedEl.value || 1),
+    };
+    const data = await requestJson(
+      "/api/runtime",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      null,
+    );
+    const runtime = data.runtime || {};
+    liveState.running = Boolean(runtime.running);
+    setLiveUiState();
+    setStatus(`Live mode ${liveState.running ? "running" : "paused"} at ${liveSpeedEl.value}x.`, "ok");
+    return true;
+  } catch {
+    liveState.running = !targetRunning;
+    setLiveUiState();
+    setStatus("Failed to update live controls. State restored.", "error");
+    await initializeRuntime();
+    return false;
+  }
+}
+
+function scheduleStatePolling(delayMs = STATE_POLL_MS) {
+  if (liveState.pollTimerId !== null) {
+    clearTimeout(liveState.pollTimerId);
+  }
+  liveState.pollTimerId = setTimeout(pollLiveState, Math.max(80, delayMs));
+}
+
+async function pollLiveState() {
+  if (liveState.polling) {
+    scheduleStatePolling(STATE_POLL_MS);
+    return;
+  }
+
+  liveState.polling = true;
+  try {
+    await refresh(null);
+  } finally {
+    liveState.polling = false;
+    scheduleStatePolling(liveState.running ? STATE_POLL_MS : Math.max(STATE_POLL_MS, getLiveTickIntervalMs()));
+  }
+}
+
+async function toggleLiveMode() {
+  liveState.running = !liveState.running;
+  setLiveUiState();
+  await syncRuntimeControls();
+}
 
 function createCityScene(container) {
   const scene = new THREE.Scene();
@@ -217,6 +424,18 @@ function createCityScene(container) {
   const cityGroup = new THREE.Group();
   scene.add(cityGroup);
 
+  const flowGroup = new THREE.Group();
+  scene.add(flowGroup);
+
+  const roadsGroup = new THREE.Group();
+  flowGroup.add(roadsGroup);
+
+  const alertsGroup = new THREE.Group();
+  flowGroup.add(alertsGroup);
+
+  const vehiclesGroup = new THREE.Group();
+  flowGroup.add(vehiclesGroup);
+
   const atmosphereGroup = new THREE.Group();
   scene.add(atmosphereGroup);
 
@@ -227,6 +446,31 @@ function createCityScene(container) {
   const treeGeometry = new THREE.ConeGeometry(1.4, 4.4, 8);
   const treeTrunkGeometry = new THREE.CylinderGeometry(0.22, 0.28, 1.2, 8);
   const alertGeometry = new THREE.CylinderGeometry(0.35, 0.35, 10, 10);
+  const weatherParticleGeometry = new THREE.BoxGeometry(0.15, 1, 0.15);
+
+  const roadMaterials = {
+    blocked: new THREE.MeshStandardMaterial({ color: 0x9f4f41, roughness: 0.74 }),
+    congested: new THREE.MeshStandardMaterial({ color: 0xcb8b39, roughness: 0.72 }),
+    stable: new THREE.MeshStandardMaterial({ color: 0x4f5952, roughness: 0.82, metalness: 0.04 }),
+  };
+
+  const vehicleMaterials = {
+    car: new THREE.MeshStandardMaterial({ color: 0x3b4650, roughness: 0.5, metalness: 0.12 }),
+    public_transport: new THREE.MeshStandardMaterial({ color: 0x29654f, roughness: 0.5, metalness: 0.12 }),
+    other: new THREE.MeshStandardMaterial({ color: 0xc48e47, roughness: 0.5, metalness: 0.12 }),
+  };
+
+  const alertMaterial = new THREE.MeshStandardMaterial({
+    color: 0x9f4f41,
+    emissive: 0x4d1f19,
+    roughness: 0.35,
+    metalness: 0.08,
+  });
+
+  const weatherMaterials = {
+    rain: new THREE.MeshStandardMaterial({ color: 0x88a1a6, roughness: 0.45, transparent: true, opacity: 0.55 }),
+    snow: new THREE.MeshStandardMaterial({ color: 0xf6f7f6, roughness: 0.45, transparent: true, opacity: 0.55 }),
+  };
 
   function resize() {
     const width = container.clientWidth || 1;
@@ -248,15 +492,17 @@ function createCityScene(container) {
   });
 
   function animateVehicles() {
-    const time = performance.now() * 0.00035;
-    sceneState.vehicleMeshes.forEach((vehicle, index) => {
-      const route = vehicle.userData.route;
-      if (!route) {
+    const alpha = getInterpolationAlpha();
+    sceneState.vehicleMeshes.forEach((vehicle) => {
+      const controlPoints = vehicle.userData.controlPoints;
+      if (!controlPoints || controlPoints.length !== 3) {
         return;
       }
-      const t = (time * vehicle.userData.speed + vehicle.userData.offset) % 1;
-      const position = route.getPointAt(t);
-      const tangent = route.getTangentAt(t).normalize();
+      const fromOffset = Number(vehicle.userData.fromOffset ?? vehicle.userData.offset ?? 0);
+      const toOffset = Number(vehicle.userData.toOffset ?? vehicle.userData.offset ?? 0);
+      const t = Math.min(0.99, Math.max(0.01, fromOffset + (toOffset - fromOffset) * alpha));
+      const position = computeCurvePoint(controlPoints, t);
+      const tangent = computeCurveTangent(controlPoints, t);
       vehicle.position.copy(position);
       vehicle.position.y += 1.1;
       vehicle.rotation.y = Math.atan2(tangent.x, tangent.z);
@@ -279,6 +525,10 @@ function createCityScene(container) {
     scene,
     camera,
     cityGroup,
+    flowGroup,
+    roadsGroup,
+    alertsGroup,
+    vehiclesGroup,
     atmosphereGroup,
     buildingGeometry,
     nodeGeometry,
@@ -287,6 +537,11 @@ function createCityScene(container) {
     treeGeometry,
     treeTrunkGeometry,
     alertGeometry,
+    weatherParticleGeometry,
+    roadMaterials,
+    vehicleMaterials,
+    alertMaterial,
+    weatherMaterials,
     renderer,
     resizeObserver,
     controls,
@@ -295,7 +550,11 @@ function createCityScene(container) {
     ground,
     plaza,
     vehicleMeshes: [],
+    roadMeshesById: new Map(),
+    vehicleMeshesByKey: new Map(),
     weatherParticles: [],
+    staticGraphSignature: null,
+    currentWeatherKey: null,
   };
 }
 
@@ -305,7 +564,9 @@ function setStatus(message, state = "idle") {
 }
 
 async function requestJson(path, options = {}, pendingMessage = "Syncing control room...") {
-  setStatus(pendingMessage, "busy");
+  if (pendingMessage !== null) {
+    setStatus(pendingMessage, "busy");
+  }
   const response = await fetch(`${API}${path}`, options);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -317,6 +578,7 @@ async function requestJson(path, options = {}, pendingMessage = "Syncing control
 }
 
 async function resetSimulation() {
+  activeRunId += 1;
   try {
     await requestJson(
       "/api/reset",
@@ -327,23 +589,13 @@ async function resetSimulation() {
       },
       "Resetting simulation...",
     );
+    lastAppliedTimeSeconds = -1;
+    interpolationState.previousTimeSeconds = null;
+    interpolationState.currentTimeSeconds = null;
+    interpolationState.previousAtMs = null;
+    interpolationState.currentAtMs = null;
     await refresh("Simulation reset to baseline.");
-  } catch {}
-}
-
-async function step(count) {
-  try {
-    const data = await requestJson(
-      "/api/step",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count }),
-      },
-      `Advancing simulation by ${count} minute${count === 1 ? "" : "s"}...`,
-    );
-    applyState(data.state);
-    setStatus(`Simulation advanced by ${count} minute${count === 1 ? "" : "s"}.`, "ok");
+    await syncRuntimeControls();
   } catch {}
 }
 
@@ -358,10 +610,11 @@ function formatNumber(value, maximumFractionDigits = 2) {
 }
 
 function formatMinute(minute) {
-  const totalMinutes = Math.max(0, Number(minute) || 0);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `T+${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  const totalSeconds = Math.max(0, Math.round(Number(minute) || 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `T+${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function titleCase(value) {
@@ -395,15 +648,15 @@ function describeNetworkMood(state) {
   const activeEvents = state.active_events?.length || 0;
 
   if (blocked > 0) {
-    return "Network under disruption";
+    return "Network disrupted";
   }
   if (activeEvents > 0 || density > 25) {
-    return "Pressure building";
+    return "Increasing congestion";
   }
   if (density > 12) {
-    return "Dense commuter flow";
+    return "Heavy commuter traffic";
   }
-  return "Steady flow";
+  return "Steady traffic flow";
 }
 
 function renderOverview(state) {
@@ -411,7 +664,7 @@ function renderOverview(state) {
   const movingResidents = residents.filter((resident) => resident.moving_edge_id).length;
   const delayedResidents = residents.filter((resident) => Number(resident.delayed_minutes) > 0).length;
 
-  simTimeEl.textContent = formatMinute(state.minute);
+  simTimeEl.textContent = formatMinute(state.sim_time_seconds);
   weatherStateEl.textContent = titleCase(state.weather);
   eventCountEl.textContent = formatNumber(state.active_events?.length || 0, 0);
   residentCountEl.textContent = formatNumber(residents.length, 0);
@@ -419,12 +672,16 @@ function renderOverview(state) {
   delayedCountEl.textContent = formatNumber(delayedResidents, 0);
   networkMoodEl.textContent = describeNetworkMood(state);
   renderActiveEvents(state.active_events || []);
+
+  incidentState.nodes = (state.graph?.nodes || []).map((node) => node.node_id);
+  incidentState.edges = (state.graph?.edges || []).map((edge) => edge.edge_id);
+  updateEventHints();
 }
 
 function renderActiveEvents(events) {
   eventCountBadgeEl.textContent = `${events.length} live`;
   if (!events.length) {
-    activeEventsEl.innerHTML = '<p class="event-empty">No active disruptions.</p>';
+    activeEventsEl.innerHTML = '<p class="event-empty">No active incidents.</p>';
     return;
   }
 
@@ -435,11 +692,11 @@ function renderActiveEvents(events) {
         ? payloadEntries
             .map(([key, value]) => `<code>${escapeHtml(key)}</code>: ${escapeHtml(value)}`)
             .join("<br />")
-        : "No payload context.";
+        : "No additional context provided.";
 
       return `
         <article class="event-chip">
-          <small>${escapeHtml(titleCase(event.event_type))}</small>
+          <small>${escapeHtml(EVENT_TYPE_LABELS[event.event_type] || titleCase(event.event_type))}</small>
           <strong>${escapeHtml(event.event_id)}</strong>
           <small>Duration: ${escapeHtml(event.duration_minutes)} min</small>
           <small>${payload}</small>
@@ -474,12 +731,12 @@ function clearGroup(group) {
 
 function roadMaterial(edge) {
   if (edge.blocked) {
-    return new THREE.MeshStandardMaterial({ color: 0x9f4f41, roughness: 0.74 });
+    return sceneState.roadMaterials.blocked;
   }
   if (edge.congestion > 20) {
-    return new THREE.MeshStandardMaterial({ color: 0xcb8b39, roughness: 0.72 });
+    return sceneState.roadMaterials.congested;
   }
-  return new THREE.MeshStandardMaterial({ color: 0x4f5952, roughness: 0.82, metalness: 0.04 });
+  return sceneState.roadMaterials.stable;
 }
 
 function addBuildings(nodes) {
@@ -544,7 +801,8 @@ function addParks(nodes) {
   });
 }
 
-function addRoads(edges, nodeById) {
+function upsertRoads(edges, nodeById) {
+  const seen = new Set();
   edges.forEach((edge) => {
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
@@ -552,17 +810,33 @@ function addRoads(edges, nodeById) {
       return;
     }
 
+    seen.add(edge.edge_id);
+
+    let road = sceneState.roadMeshesById.get(edge.edge_id);
+    if (!road) {
+      road = new THREE.Mesh(sceneState.roadGeometry, roadMaterial(edge));
+      road.castShadow = true;
+      road.receiveShadow = true;
+      sceneState.roadsGroup.add(road);
+      sceneState.roadMeshesById.set(edge.edge_id, road);
+    }
+
     const dx = target.sceneX - source.sceneX;
     const dz = target.sceneZ - source.sceneZ;
     const length = Math.hypot(dx, dz);
     const width = Math.min(5.8, 1.8 + edge.congestion / 10);
-    const road = new THREE.Mesh(sceneState.roadGeometry, roadMaterial(edge));
-    road.castShadow = true;
-    road.receiveShadow = true;
+    road.material = roadMaterial(edge);
     road.scale.set(width, 1, length);
     road.position.set((source.sceneX + target.sceneX) / 2, 0.45, (source.sceneZ + target.sceneZ) / 2);
     road.rotation.y = Math.atan2(dx, dz);
-    sceneState.cityGroup.add(road);
+  });
+
+  Array.from(sceneState.roadMeshesById.entries()).forEach(([edgeId, road]) => {
+    if (seen.has(edgeId)) {
+      return;
+    }
+    sceneState.roadsGroup.remove(road);
+    sceneState.roadMeshesById.delete(edgeId);
   });
 }
 
@@ -594,12 +868,10 @@ function addHubs(nodes, residentsByNode) {
   });
 }
 
-function addAlerts(events, nodeById, edgeById) {
+function updateAlerts(events, nodeById, edgeById) {
+  clearGroup(sceneState.alertsGroup);
   events.forEach((event, index) => {
-    const alert = new THREE.Mesh(
-      sceneState.alertGeometry,
-      new THREE.MeshStandardMaterial({ color: 0x9f4f41, emissive: 0x4d1f19, roughness: 0.35, metalness: 0.08 }),
-    );
+    const alert = new THREE.Mesh(sceneState.alertGeometry, sceneState.alertMaterial);
     alert.castShadow = true;
 
     let x = -20 + index * 6;
@@ -622,17 +894,90 @@ function addAlerts(events, nodeById, edgeById) {
     }
 
     alert.position.set(x, 5.5, z);
-    sceneState.cityGroup.add(alert);
+    sceneState.alertsGroup.add(alert);
   });
 }
 
-function addVehicles(residents, edgeById, nodeById) {
-  sceneState.vehicleMeshes = [];
-  const movingResidents = residents.filter((resident) => resident.moving_edge_id && edgeById.has(resident.moving_edge_id)).slice(0, 220);
+function computeCurvePoint(controlPoints, t) {
+  const inv = 1 - t;
+  const [p0, p1, p2] = controlPoints;
+  return new THREE.Vector3(
+    inv * inv * p0.x + 2 * inv * t * p1.x + t * t * p2.x,
+    inv * inv * p0.y + 2 * inv * t * p1.y + t * t * p2.y,
+    inv * inv * p0.z + 2 * inv * t * p1.z + t * t * p2.z,
+  );
+}
+
+function computeCurveTangent(controlPoints, t) {
+  const [p0, p1, p2] = controlPoints;
+  return new THREE.Vector3(
+    2 * (1 - t) * (p1.x - p0.x) + 2 * t * (p2.x - p1.x),
+    2 * (1 - t) * (p1.y - p0.y) + 2 * t * (p2.y - p1.y),
+    2 * (1 - t) * (p1.z - p0.z) + 2 * t * (p2.z - p1.z),
+  ).normalize();
+}
+
+function addVehicles(residents, edges, edgeById, nodeById) {
+  const seenVehicleKeys = new Set();
+  const movingResidents = residents
+    .filter((resident) => resident.moving_edge_id && edgeById.has(resident.moving_edge_id))
+    .sort((left, right) => String(left.resident_id).localeCompare(String(right.resident_id)));
+  const edgeDemand = new Map();
+  movingResidents.forEach((resident) => {
+    const edgeId = String(resident.moving_edge_id);
+    const count = edgeDemand.get(edgeId) || 0;
+    edgeDemand.set(edgeId, count + 1);
+  });
+
+  const vehiclesToRender = movingResidents.map((resident, index) => {
+    const residentId = String(resident.resident_id || `${resident.current_node_id}-${resident.moving_edge_id}-${resident.mode}-${index}`);
+    let hash = 0;
+    for (let characterIndex = 0; characterIndex < residentId.length; characterIndex += 1) {
+      hash = (hash * 31 + residentId.charCodeAt(characterIndex)) % 997;
+    }
+    return {
+      edgeId: String(resident.moving_edge_id),
+      representative: resident,
+      laneOffset: hash % 4,
+      synthetic: false,
+      vehicleKey: `resident:${residentId}`,
+    };
+  });
+
+  edges.forEach((edge) => {
+    const movingDemand = edgeDemand.get(edge.edge_id) || 0;
+    const congestionDemand = Math.max(0, Math.ceil(Number(edge.congestion || 0) / 12));
+    const syntheticNeeded = Math.max(0, congestionDemand - Math.ceil(movingDemand / 3));
+    if (!syntheticNeeded) {
+      return;
+    }
+
+    const source = nodeById.get(edge.source);
+    if (!source) {
+      return;
+    }
+
+    const syntheticRepresentative = {
+      mode: "car",
+      moving_total_seconds: 1,
+      moving_remaining_seconds: 1,
+    };
+
+    for (let i = 0; i < Math.min(6, syntheticNeeded); i += 1) {
+      vehiclesToRender.push({
+        edgeId: edge.edge_id,
+        representative: syntheticRepresentative,
+        laneOffset: i,
+        synthetic: true,
+        vehicleKey: `synthetic:${edge.edge_id}:${i}`,
+      });
+    }
+  });
+
   vehicleCountEl.textContent = formatNumber(movingResidents.length, 0);
 
-  movingResidents.forEach((resident, index) => {
-    const edge = edgeById.get(resident.moving_edge_id);
+  vehiclesToRender.forEach((vehicleState, index) => {
+    const edge = edgeById.get(vehicleState.edgeId);
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
     if (!source || !target) {
@@ -645,30 +990,74 @@ function addVehicles(residents, edgeById, nodeById) {
       new THREE.Vector3(target.sceneX, 0.6, target.sceneZ),
     ]);
 
-    const modeColor = resident.mode === "car" ? 0x3b4650 : resident.mode === "public_transport" ? 0x29654f : 0xc48e47;
-    const vehicle = new THREE.Mesh(
-      sceneState.vehicleGeometry,
-      new THREE.MeshStandardMaterial({ color: modeColor, roughness: 0.5, metalness: 0.12 }),
-    );
-    vehicle.castShadow = true;
-    vehicle.receiveShadow = true;
+    const vehicleKey = vehicleState.vehicleKey;
+    seenVehicleKeys.add(vehicleKey);
+    let vehicle = sceneState.vehicleMeshesByKey.get(vehicleKey);
+    if (!vehicle) {
+      const material =
+        vehicleState.representative.mode === "car"
+          ? sceneState.vehicleMaterials.car
+          : vehicleState.representative.mode === "public_transport"
+            ? sceneState.vehicleMaterials.public_transport
+            : sceneState.vehicleMaterials.other;
+      vehicle = new THREE.Mesh(sceneState.vehicleGeometry, material);
+      vehicle.castShadow = true;
+      vehicle.receiveShadow = true;
+      sceneState.vehiclesGroup.add(vehicle);
+      sceneState.vehicleMeshesByKey.set(vehicleKey, vehicle);
+    }
+
+    const progress =
+      vehicleState.representative.moving_total_seconds > 0
+        ? 1 - vehicleState.representative.moving_remaining_seconds / vehicleState.representative.moving_total_seconds
+        : ((index * 7) % 100) / 100;
+    const nextOffset = Math.min(0.98, Math.max(0.02, progress + vehicleState.laneOffset * 0.03));
+    const previousState = vehicle.userData || {};
+    const previousOffset =
+      previousState.edgeId === vehicleState.edgeId
+        ? Number(previousState.toOffset ?? previousState.offset ?? nextOffset)
+        : nextOffset;
+
+    const p0 = new THREE.Vector3(source.sceneX, 0.6, source.sceneZ);
+    const p1 = new THREE.Vector3((source.sceneX + target.sceneX) / 2, 0.85, (source.sceneZ + target.sceneZ) / 2);
+    const p2 = new THREE.Vector3(target.sceneX, 0.6, target.sceneZ);
+
     vehicle.userData = {
-      route,
-      speed: 0.08 + (index % 5) * 0.012,
-      offset: (index * 0.071) % 1,
+      offset: nextOffset,
+      fromOffset: previousOffset,
+      toOffset: nextOffset,
+      vehicleKey,
+      edgeId: vehicleState.edgeId,
+      controlPoints: [p0, p1, p2],
     };
-    sceneState.cityGroup.add(vehicle);
-    sceneState.vehicleMeshes.push(vehicle);
+    vehicle.position.y += (vehicleState.laneOffset % 3) * 0.02;
   });
+
+  Array.from(sceneState.vehicleMeshesByKey.entries()).forEach(([vehicleKey, mesh]) => {
+    if (seenVehicleKeys.has(vehicleKey)) {
+      return;
+    }
+    sceneState.vehiclesGroup.remove(mesh);
+    sceneState.vehicleMeshesByKey.delete(vehicleKey);
+  });
+
+  sceneState.vehicleMeshes = Array.from(sceneState.vehicleMeshesByKey.values());
 }
 
 function applyWeather(weather) {
-  const preset = WEATHER_PRESETS[String(weather).toLowerCase()] || WEATHER_PRESETS.clear;
+  const weatherKey = String(weather).toLowerCase();
+  const preset = WEATHER_PRESETS[weatherKey] || WEATHER_PRESETS.clear;
   sceneState.scene.background.setHex(preset.background);
   sceneState.scene.fog.color.setHex(preset.fog);
   sceneState.ambientLight.intensity = preset.ambient;
   sceneState.sunLight.intensity = preset.sun;
   sceneStateEl.textContent = preset.sceneLabel;
+
+  if (sceneState.currentWeatherKey === weatherKey) {
+    return;
+  }
+
+  sceneState.currentWeatherKey = weatherKey;
 
   clearGroup(sceneState.atmosphereGroup);
   sceneState.weatherParticles = [];
@@ -678,13 +1067,11 @@ function applyWeather(weather) {
   }
 
   const particleCount = preset === WEATHER_PRESETS.snow ? 180 : 140;
-  const materialColor = preset === WEATHER_PRESETS.snow ? 0xf6f7f6 : 0x88a1a6;
+  const weatherMaterial = preset === WEATHER_PRESETS.snow ? sceneState.weatherMaterials.snow : sceneState.weatherMaterials.rain;
 
   for (let index = 0; index < particleCount; index += 1) {
-    const particle = new THREE.Mesh(
-      new THREE.BoxGeometry(0.15, preset === WEATHER_PRESETS.snow ? 0.15 : 1.4, 0.15),
-      new THREE.MeshStandardMaterial({ color: materialColor, roughness: 0.45, transparent: true, opacity: 0.55 }),
-    );
+    const particle = new THREE.Mesh(sceneState.weatherParticleGeometry, weatherMaterial);
+    particle.scale.y = preset === WEATHER_PRESETS.snow ? 0.15 : 1.4;
     particle.position.set((index % 18) * 7 - 62, 12 + (index % 16) * 3.1, Math.floor(index / 18) * 8 - 36);
     particle.userData.speed = preset === WEATHER_PRESETS.snow ? 0.08 + (index % 4) * 0.015 : 0.3 + (index % 5) * 0.03;
     sceneState.atmosphereGroup.add(particle);
@@ -700,6 +1087,11 @@ function renderMap(state) {
     blockedCountEl.textContent = "0";
     vehicleCountEl.textContent = "0";
     clearGroup(sceneState.cityGroup);
+    clearGroup(sceneState.flowGroup);
+    sceneState.vehicleMeshes = [];
+    sceneState.roadMeshesById.clear();
+    sceneState.vehicleMeshesByKey.clear();
+    sceneState.staticGraphSignature = null;
     return;
   }
 
@@ -721,13 +1113,21 @@ function renderMap(state) {
   edgeCountEl.textContent = formatNumber(edges.length, 0);
   blockedCountEl.textContent = formatNumber(blockedCount, 0);
 
-  clearGroup(sceneState.cityGroup);
-  addBuildings(projectedNodes);
-  addParks(projectedNodes);
-  addRoads(edges, nodeById);
-  addHubs(projectedNodes, residentsByNode);
-  addAlerts(state.active_events || [], nodeById, edgeById);
-  addVehicles(residents, edgeById, nodeById);
+  const graphSignature = `${projectedNodes.map((node) => node.node_id).join(",")}::${edges
+    .map((edge) => edge.edge_id)
+    .join(",")}`;
+
+  if (sceneState.staticGraphSignature !== graphSignature) {
+    clearGroup(sceneState.cityGroup);
+    addBuildings(projectedNodes);
+    addParks(projectedNodes);
+    addHubs(projectedNodes, residentsByNode);
+    sceneState.staticGraphSignature = graphSignature;
+  }
+
+  upsertRoads(edges, nodeById);
+  updateAlerts(state.active_events || [], nodeById, edgeById);
+  addVehicles(residents, edges, edgeById, nodeById);
   applyWeather(state.weather);
 }
 
@@ -741,19 +1141,61 @@ function applyState(state) {
 
 function updateEventHints() {
   const config = EVENT_PAYLOAD_CONFIG[eventTypeEl.value] || EVENT_PAYLOAD_CONFIG.outage;
-  payloadTargetEl.placeholder = config.placeholder;
-  payloadTargetEl.required = config.required;
-  payloadTargetEl.setAttribute("aria-label", config.key);
-  eventHintEl.innerHTML = config.hint.replaceAll(/`([^`]+)`/g, "<code>$1</code>");
+  populateTargetSelect(config);
+  payloadTargetEl.setAttribute("aria-label", config.targetLabel);
+  const optionCount = getTargetOptions(config).length;
+  if (config.source === "none") {
+    eventHintEl.textContent = config.hint;
+    return;
+  }
+  eventHintEl.textContent = `${config.hint} ${config.targetLabel} options: ${optionCount}.`;
 }
 
 async function refresh(successMessage = "Live data synchronized.") {
+  const runId = activeRunId;
   try {
-    const data = await requestJson("/api/state", {}, "Fetching live simulation state...");
-    applyState(data.state);
-    setStatus(successMessage, "ok");
+    const data = await requestJson("/api/state", {}, successMessage === null ? null : "Fetching live simulation state...");
+    if (runId !== activeRunId) {
+      return;
+    }
+    const nextTimeSeconds = Number(data.state?.sim_time_seconds ?? -1);
+    if (Number.isFinite(nextTimeSeconds) && nextTimeSeconds < lastAppliedTimeSeconds) {
+      interpolationState.previousTimeSeconds = null;
+      interpolationState.currentTimeSeconds = null;
+      interpolationState.previousAtMs = null;
+      interpolationState.currentAtMs = null;
+      lastAppliedTimeSeconds = -1;
+    }
+    if (Number.isFinite(nextTimeSeconds) && nextTimeSeconds >= lastAppliedTimeSeconds) {
+      markSnapshotArrival(nextTimeSeconds);
+      applyState(data.state);
+      lastAppliedTimeSeconds = nextTimeSeconds;
+    }
+    if (successMessage !== null) {
+      setStatus(successMessage, "ok");
+    }
   } catch {}
 }
 
+async function initializeRuntime() {
+  try {
+    const data = await requestJson("/api/runtime", {}, null);
+    const runtime = data.runtime || {};
+    liveState.running = Boolean(runtime.running);
+    const speed = Number(runtime.speed_multiplier || 1);
+    if (Number.isFinite(speed) && speed > 0) {
+      const normalized = Math.min(10, Math.max(1, Math.round(speed)));
+      liveSpeedEl.value = String(normalized);
+    }
+    setLiveUiState();
+  } catch {
+    liveState.running = true;
+    setLiveUiState();
+  }
+}
+
 updateEventHints();
-refresh();
+initializeRuntime().finally(async () => {
+  await refresh();
+  scheduleStatePolling(STATE_POLL_MS);
+});

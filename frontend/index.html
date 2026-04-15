@@ -64,9 +64,17 @@
       <main>
         <section class="controls panel" aria-label="Simulation controls">
           <div class="controls-group">
-            <button id="step1">Step +1 min</button>
-            <button id="step10">Step +10 min</button>
-            <button id="run60">Run +60 min</button>
+            <button id="liveToggle">Pause Live</button>
+            <label class="inline-field" for="liveSpeed">
+              <span>Speed</span>
+              <select id="liveSpeed" aria-label="Live speed">
+                <option value="1" selected>1x</option>
+                <option value="2">2x</option>
+                <option value="3">3x</option>
+                <option value="6">6x</option>
+                <option value="10">10x</option>
+              </select>
+            </label>
             <button id="reset" class="button-muted">Reset</button>
           </div>
           <div id="statusMessage" class="status-pill" data-state="idle" aria-live="polite">
@@ -155,55 +163,55 @@
           <section class="events panel">
             <div class="section-heading section-heading-stack">
               <div>
-                <p class="eyebrow">Scenario Injection</p>
-                <h2>Controlled Disruptions</h2>
+                <p class="eyebrow">Incident Controls</p>
+                <h2>Scenario Incidents</h2>
               </div>
               <p class="events-intro">
-                Inject targeted incidents to pressure-test routing resilience and recovery.
+                Select incident presets to pressure-test routing resilience and recovery.
               </p>
             </div>
 
             <form id="eventForm" class="event-form">
               <label class="field">
-                <span>Event ID</span>
-                <input name="event_id" placeholder="rush-hour-accident" required />
-              </label>
-
-              <label class="field">
-                <span>Event Type</span>
+                <span>Incident Type</span>
                 <select name="event_type">
-                  <option value="accident">accident</option>
-                  <option value="road_closure">road_closure</option>
-                  <option value="concert">concert</option>
-                  <option value="extreme_weather">extreme_weather</option>
-                  <option value="outage">outage</option>
+                  <option value="accident">Road accident</option>
+                  <option value="road_closure">Road closure</option>
+                  <option value="concert">Concert surge</option>
+                  <option value="extreme_weather">Extreme weather</option>
+                  <option value="outage">Infrastructure outage</option>
                 </select>
               </label>
 
               <label class="field">
                 <span>Duration (minutes)</span>
-                <input name="duration_minutes" type="number" value="30" min="1" required />
+                <select name="duration_minutes">
+                  <option value="15">15</option>
+                  <option value="30" selected>30</option>
+                  <option value="45">45</option>
+                  <option value="60">60</option>
+                  <option value="90">90</option>
+                  <option value="120">120</option>
+                </select>
               </label>
 
               <div class="field field-wide">
-                <span>Target Payload</span>
-                <div class="payload-grid payload-grid-single">
-                  <input name="payload_target" placeholder="edge_id" required />
-                </div>
+                <span>Target</span>
+                <select name="payload_target"></select>
                 <p id="eventHint" class="field-hint">
-                  Accident and road closure events require an <code>edge_id</code> payload.
+                  Select a target for the incident type.
                 </p>
               </div>
 
-              <button type="submit" class="event-submit">Inject Event</button>
+              <button type="submit" class="event-submit">Inject Incident</button>
             </form>
 
-            <section class="event-stream" aria-label="Active disruptions">
+            <section class="event-stream" aria-label="Active incidents">
               <div class="event-stream-header">
-                <h3>Active disruptions</h3>
+                <h3>Active incidents</h3>
                 <span id="eventCountBadge" class="count-badge">0 live</span>
               </div>
-              <div id="activeEvents" class="event-list" aria-live="polite">No active disruptions.</div>
+              <div id="activeEvents" class="event-list" aria-live="polite">No active incidents.</div>
             </section>
           </section>
         </section>

@@ -8,7 +8,7 @@ from citysim.importer import ImportedCityData, import_from_json
 from citysim.plugins import ScheduledScenario
 from citysim.randomness import SeededRandom
 from citysim.simulation import CitySimulation
-from citysim.types import Building, Edge, Node, Resident, SimulationEvent, TransportMode
+from citysim.types import BehaviorProfile, Building, Edge, Node, Resident, SimulationEvent, TransportMode
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -73,28 +73,59 @@ def generate_residents(
     rng: SeededRandom,
 ) -> dict[str, Resident]:
     home_buildings = [building for building in buildings.values() if building.kind == "home"]
-    work_buildings = [building for building in buildings.values() if building.kind in {"work", "school", "leisure"}]
-    if not home_buildings or not work_buildings:
+    work_buildings = [building for building in buildings.values() if building.kind == "work"]
+    school_buildings = [building for building in buildings.values() if building.kind == "school"]
+    leisure_buildings = [building for building in buildings.values() if building.kind == "leisure"]
+
+    if not home_buildings or not (work_buildings or school_buildings or leisure_buildings):
         fallback_node = next(iter(graph.nodes.values())).node_id
         home_building = Building(building_id="home_fallback", node_id=fallback_node, kind="home", capacity=resident_count)
         work_building = Building(building_id="work_fallback", node_id=fallback_node, kind="work", capacity=resident_count)
         home_buildings = [home_building]
         work_buildings = [work_building]
+        school_buildings = [work_building]
+        leisure_buildings = [work_building]
+
+    if not school_buildings:
+        school_buildings = work_buildings or leisure_buildings
+    if not work_buildings:
+        work_buildings = school_buildings or leisure_buildings
+    if not leisure_buildings:
+        leisure_buildings = work_buildings or school_buildings
 
     residents: dict[str, Resident] = {}
     modes: list[TransportMode] = ["car", "public_transport", "bike", "walk"]
+    profile_distribution: list[BehaviorProfile] = ["worker", "student", "leisure_oriented"]
+
+    def pick_building(candidates: list[Building]) -> Building:
+        return candidates[rng.randint(0, len(candidates) - 1)]
+
     for index in range(resident_count):
-        home = home_buildings[rng.randint(0, len(home_buildings) - 1)]
-        work = work_buildings[rng.randint(0, len(work_buildings) - 1)]
-        leisure = work_buildings[rng.randint(0, len(work_buildings) - 1)]
+        home = pick_building(home_buildings)
+        profile = profile_distribution[rng.randint(0, len(profile_distribution) - 1)]
+
+        if profile == "worker":
+            primary = pick_building(work_buildings)
+            secondary = pick_building(leisure_buildings)
+            daily_targets = [primary.building_id, secondary.building_id, primary.building_id, home.building_id]
+        elif profile == "student":
+            primary = pick_building(school_buildings)
+            secondary = pick_building(leisure_buildings)
+            daily_targets = [primary.building_id, primary.building_id, secondary.building_id, home.building_id]
+        else:
+            primary = pick_building(leisure_buildings)
+            secondary = pick_building(work_buildings)
+            daily_targets = [primary.building_id, secondary.building_id, primary.building_id, home.building_id]
+
         mode = modes[rng.randint(0, len(modes) - 1)]
         resident_id = f"r_{index}"
         residents[resident_id] = Resident(
             resident_id=resident_id,
             home_building_id=home.building_id,
-            daily_targets=[work.building_id, leisure.building_id, home.building_id],
+            daily_targets=daily_targets,
             current_node_id=home.node_id,
             mode=mode,
+            behavior_profile=profile,
         )
     return residents
 
