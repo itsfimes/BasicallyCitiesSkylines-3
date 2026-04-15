@@ -11,6 +11,14 @@
       href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.183.1/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.1/examples/jsm/"
+        }
+      }
+    </script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -41,6 +49,14 @@
           <article class="meta-card">
             <span class="meta-label">Residents</span>
             <strong id="residentCount">0</strong>
+          </article>
+          <article class="meta-card">
+            <span class="meta-label">In Transit</span>
+            <strong id="movingCount">0</strong>
+          </article>
+          <article class="meta-card">
+            <span class="meta-label">Delayed</span>
+            <strong id="delayedCount">0</strong>
           </article>
         </section>
       </header>
@@ -105,11 +121,29 @@
                   <span>Blocked</span>
                   <strong id="blockedCount">-</strong>
                 </article>
+                <article>
+                  <span>Vehicles</span>
+                  <strong id="vehicleCount">-</strong>
+                </article>
               </div>
             </div>
 
             <div class="map-frame">
-              <svg id="map" viewBox="0 0 900 500" aria-label="City network map"></svg>
+              <div id="map" class="city-scene" aria-label="City network 3D scene"></div>
+              <aside id="sceneHud" class="scene-hud" aria-live="polite">
+                <article>
+                  <span>Network Mood</span>
+                  <strong id="networkMood">Steady flow</strong>
+                </article>
+                <article>
+                  <span>Scene State</span>
+                  <strong id="sceneState">Dry daylight</strong>
+                </article>
+              </aside>
+              <div class="scene-caption" aria-hidden="true">
+                <span>Drag to orbit</span>
+                <span>Scroll to zoom</span>
+              </div>
               <div class="map-legend" aria-hidden="true">
                 <span><i class="legend-swatch legend-swatch-stable"></i> Stable</span>
                 <span><i class="legend-swatch legend-swatch-congested"></i> Congested</span>
@@ -152,10 +186,9 @@
               </label>
 
               <div class="field field-wide">
-                <span>Payload Mapping</span>
-                <div class="payload-grid">
-                  <input name="key" placeholder="payload key" />
-                  <input name="value" placeholder="payload value" />
+                <span>Target Payload</span>
+                <div class="payload-grid payload-grid-single">
+                  <input name="payload_target" placeholder="edge_id" required />
                 </div>
                 <p id="eventHint" class="field-hint">
                   Accident and road closure events require an <code>edge_id</code> payload.
