@@ -1,0 +1,18 @@
+services:
+  backend:
+    build:
+      context: .
+      target: backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend

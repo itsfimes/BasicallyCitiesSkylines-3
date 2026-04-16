@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
-
 
 TransportMode = Literal["car", "public_transport", "bike", "walk"]
 ActivityType = Literal["work", "school", "leisure", "home"]
@@ -11,7 +10,7 @@ BehaviorProfile = Literal["worker", "student", "leisure_oriented"]
 EventType = Literal["accident", "road_closure", "concert", "extreme_weather", "outage"]
 
 
-class WeatherType(str, Enum):
+class WeatherType(StrEnum):
     CLEAR = "clear"
     RAIN = "rain"
     STORM = "storm"

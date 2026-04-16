@@ -4,177 +4,168 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
-    <title>CitySim Control Room</title>
+    <title>CitySim</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.183.1/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.1/examples/jsm/"
-        }
-      }
-    </script>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
-      <header class="hero panel">
-        <div class="hero-copy">
-          <p class="eyebrow">Urban Systems Monitor</p>
-          <h1>CitySim Control Room</h1>
-          <p class="hero-text">
-            Real-time scenario testing for transport flow, weather shocks, and infrastructure
-            failures across the city network.
-          </p>
+    <div class="app">
+      <nav class="topbar">
+        <div class="topbar-left">
+          <h1 class="logo">CitySim</h1>
+          <span class="logo-dot"></span>
+          <span class="topbar-subtitle">Control Room</span>
         </div>
+        <div class="topbar-right">
+          <div class="topbar-stat">
+            <span class="topbar-stat-label">TIME</span>
+            <span class="topbar-stat-value mono" id="simTime">--:--</span>
+          </div>
+          <div class="topbar-stat">
+            <span class="topbar-stat-label">WEATHER</span>
+            <span class="topbar-stat-value" id="weatherState">---</span>
+          </div>
+          <div class="topbar-stat">
+            <span class="topbar-stat-label">EVENTS</span>
+            <span class="topbar-stat-value mono" id="eventCount">-</span>
+          </div>
+          <div class="topbar-stat">
+            <span class="topbar-stat-label">AGENTS</span>
+            <span class="topbar-stat-value mono" id="residentCount">-</span>
+          </div>
+          <div class="topbar-stat">
+            <span class="topbar-stat-label">TRANSIT</span>
+            <span class="topbar-stat-value mono" id="movingCount">-</span>
+          </div>
+          <div class="topbar-stat">
+            <span class="topbar-stat-label">DELAYED</span>
+            <span class="topbar-stat-value mono" id="delayedCount">-</span>
+          </div>
+        </div>
+      </nav>
 
-        <section class="hero-meta" aria-label="Simulation overview">
-          <article class="meta-card">
-            <span class="meta-label">Sim Time</span>
-            <strong id="simTime">T+00:00</strong>
-          </article>
-          <article class="meta-card">
-            <span class="meta-label">Weather</span>
-            <strong id="weatherState">Unknown</strong>
-          </article>
-          <article class="meta-card">
-            <span class="meta-label">Active Events</span>
-            <strong id="eventCount">0</strong>
-          </article>
-          <article class="meta-card">
-            <span class="meta-label">Residents</span>
-            <strong id="residentCount">0</strong>
-          </article>
-          <article class="meta-card">
-            <span class="meta-label">In Transit</span>
-            <strong id="movingCount">0</strong>
-          </article>
-          <article class="meta-card">
-            <span class="meta-label">Delayed</span>
-            <strong id="delayedCount">0</strong>
-          </article>
-        </section>
-      </header>
-
-      <main>
-        <section class="controls panel" aria-label="Simulation controls">
-          <div class="controls-group">
-            <button id="liveToggle">Pause Live</button>
-            <label class="inline-field" for="liveSpeed">
-              <span>Speed</span>
-              <select id="liveSpeed" aria-label="Live speed">
+      <main class="main">
+        <section class="controls-bar">
+          <div class="controls-left">
+            <button id="liveToggle" class="btn btn-primary">Pause</button>
+            <div class="speed-control">
+              <span class="speed-label">Speed</span>
+              <select id="liveSpeed" class="select-speed" aria-label="Live speed">
                 <option value="1" selected>1x</option>
                 <option value="2">2x</option>
                 <option value="3">3x</option>
                 <option value="6">6x</option>
                 <option value="10">10x</option>
               </select>
-            </label>
-            <button id="reset" class="button-muted">Reset</button>
+            </div>
+            <button id="reset" class="btn btn-ghost">Reset</button>
           </div>
-          <div id="statusMessage" class="status-pill" data-state="idle" aria-live="polite">
-            Awaiting live simulation data.
+          <div id="statusMessage" class="status" data-state="idle">
+            Connecting...
           </div>
         </section>
 
-        <section class="metrics" aria-label="Simulation metrics">
-          <article class="metric-card metric-card-density">
-            <p class="metric-kicker">Network Load</p>
-            <h2>Traffic Density</h2>
-            <div id="trafficDensity">-</div>
-            <p class="metric-note">Average congestion across all active edges.</p>
+        <section class="metrics-row">
+          <article class="metric-card mc-density">
+            <div class="mc-header">
+              <span class="mc-kicker">LOAD</span>
+              <span class="mc-icon mc-icon-density"></span>
+            </div>
+            <div class="mc-value mono skeleton" id="trafficDensity">-</div>
+            <div class="mc-spark"></div>
+            <div class="mc-label">Traffic Density</div>
           </article>
-          <article class="metric-card metric-card-delay">
-            <p class="metric-kicker">Reliability</p>
-            <h2>Avg Delay (min)</h2>
-            <div id="avgDelay">-</div>
-            <p class="metric-note">Mean resident delay caused by network pressure.</p>
+          <article class="metric-card mc-delay">
+            <div class="mc-header">
+              <span class="mc-kicker">RELIABILITY</span>
+              <span class="mc-icon mc-icon-delay"></span>
+            </div>
+            <div class="mc-value mono skeleton" id="avgDelay">-</div>
+            <div class="mc-spark"></div>
+            <div class="mc-label">Avg Delay (min)</div>
           </article>
-          <article class="metric-card metric-card-emissions">
-            <p class="metric-kicker">Environmental Cost</p>
-            <h2>Emissions (kg CO₂)</h2>
-            <div id="emissions">-</div>
-            <p class="metric-note">Rolling transport output from the current scenario.</p>
+          <article class="metric-card mc-emissions">
+            <div class="mc-header">
+              <span class="mc-kicker">EMISSIONS</span>
+              <span class="mc-icon mc-icon-emissions"></span>
+            </div>
+            <div class="mc-value mono skeleton" id="emissions">-</div>
+            <div class="mc-spark"></div>
+            <div class="mc-label">kg CO2</div>
           </article>
-          <article class="metric-card metric-card-energy">
-            <p class="metric-kicker">System Demand</p>
-            <h2>Energy (kWh)</h2>
-            <div id="energy">-</div>
-            <p class="metric-note">Estimated energy use across the mobility stack.</p>
+          <article class="metric-card mc-energy">
+            <div class="mc-header">
+              <span class="mc-kicker">ENERGY</span>
+              <span class="mc-icon mc-icon-energy"></span>
+            </div>
+            <div class="mc-value mono skeleton" id="energy">-</div>
+            <div class="mc-spark"></div>
+            <div class="mc-label">kWh</div>
           </article>
         </section>
 
-        <section class="dashboard-grid">
-          <section class="map-wrap panel">
-            <div class="section-heading">
+        <section class="dashboard">
+          <section class="map-panel card">
+            <div class="panel-header">
               <div>
-                <p class="eyebrow">Live Network</p>
-                <h2>Mobility Topology</h2>
+                <span class="panel-kicker">LIVE NETWORK</span>
+                <h2 class="panel-title">Mobility Topology</h2>
               </div>
-              <div class="map-stats" aria-label="Graph statistics">
-                <article>
-                  <span>Nodes</span>
-                  <strong id="nodeCount">-</strong>
-                </article>
-                <article>
-                  <span>Edges</span>
-                  <strong id="edgeCount">-</strong>
-                </article>
-                <article>
-                  <span>Blocked</span>
-                  <strong id="blockedCount">-</strong>
-                </article>
-                <article>
-                  <span>Vehicles</span>
-                  <strong id="vehicleCount">-</strong>
-                </article>
+              <div class="map-stats">
+                <div class="stat-chip"><span class="stat-chip-label">Nodes</span><span class="stat-chip-val mono" id="nodeCount">-</span></div>
+                <div class="stat-chip"><span class="stat-chip-label">Edges</span><span class="stat-chip-val mono" id="edgeCount">-</span></div>
+                <div class="stat-chip"><span class="stat-chip-label">Blocked</span><span class="stat-chip-val mono" id="blockedCount">-</span></div>
+                <div class="stat-chip"><span class="stat-chip-label">Vehicles</span><span class="stat-chip-val mono" id="vehicleCount">-</span></div>
               </div>
             </div>
 
             <div class="map-frame">
               <div id="map" class="city-scene" aria-label="City network 3D scene"></div>
               <aside id="sceneHud" class="scene-hud" aria-live="polite">
-                <article>
-                  <span>Network Mood</span>
-                  <strong id="networkMood">Steady flow</strong>
-                </article>
-                <article>
-                  <span>Scene State</span>
-                  <strong id="sceneState">Dry daylight</strong>
-                </article>
+                <div class="hud-item">
+                  <span class="hud-label">MOOD</span>
+                  <span class="hud-value" id="networkMood">Steady flow</span>
+                </div>
+                <div class="hud-item">
+                  <span class="hud-label">SCENE</span>
+                  <span class="hud-value" id="sceneState">Clear</span>
+                </div>
               </aside>
-              <div class="scene-caption" aria-hidden="true">
+              <div class="scene-caption">
                 <span>Drag to orbit</span>
                 <span>Scroll to zoom</span>
               </div>
-              <div class="map-legend" aria-hidden="true">
-                <span><i class="legend-swatch legend-swatch-stable"></i> Stable</span>
-                <span><i class="legend-swatch legend-swatch-congested"></i> Congested</span>
-                <span><i class="legend-swatch legend-swatch-blocked"></i> Blocked</span>
+              <div class="map-legend">
+                <span><i class="legend-swatch swatch-stable"></i>Stable</span>
+                <span><i class="legend-swatch swatch-congested"></i>Congested</span>
+                <span><i class="legend-swatch swatch-blocked"></i>Blocked</span>
               </div>
+            </div>
+
+            <div class="minimap-section">
+              <span class="panel-kicker">2D OVERVIEW</span>
+              <div id="miniMap" class="mini-map-container"></div>
             </div>
           </section>
 
-          <section class="events panel">
-            <div class="section-heading section-heading-stack">
+          <section class="events-panel card">
+            <div class="panel-header">
               <div>
-                <p class="eyebrow">Incident Controls</p>
-                <h2>Scenario Incidents</h2>
+                <span class="panel-kicker">INCIDENTS</span>
+                <h2 class="panel-title">Scenario Control</h2>
               </div>
-              <p class="events-intro">
-                Select incident presets to pressure-test routing resilience and recovery.
-              </p>
+              <span id="eventCountBadge" class="badge">0 live</span>
             </div>
 
             <form id="eventForm" class="event-form">
               <label class="field">
-                <span>Incident Type</span>
-                <select name="event_type">
+                <span class="field-label">Type</span>
+                <select name="event_type" class="input">
                   <option value="accident">Road accident</option>
                   <option value="road_closure">Road closure</option>
                   <option value="concert">Concert surge</option>
@@ -182,42 +173,38 @@
                   <option value="outage">Infrastructure outage</option>
                 </select>
               </label>
-
               <label class="field">
-                <span>Duration (minutes)</span>
-                <select name="duration_minutes">
-                  <option value="15">15</option>
-                  <option value="30" selected>30</option>
-                  <option value="45">45</option>
-                  <option value="60">60</option>
-                  <option value="90">90</option>
-                  <option value="120">120</option>
+                <span class="field-label">Duration</span>
+                <select name="duration_minutes" class="input">
+                  <option value="15">15 min</option>
+                  <option value="30" selected>30 min</option>
+                  <option value="45">45 min</option>
+                  <option value="60">60 min</option>
+                  <option value="90">90 min</option>
+                  <option value="120">120 min</option>
                 </select>
               </label>
-
-              <div class="field field-wide">
-                <span>Target</span>
-                <select name="payload_target"></select>
-                <p id="eventHint" class="field-hint">
-                  Select a target for the incident type.
-                </p>
+              <div class="field field-full">
+                <span class="field-label">Target</span>
+                <select name="payload_target" class="input"></select>
+                <span id="eventHint" class="field-hint">Select a target for the incident type.</span>
               </div>
-
-              <button type="submit" class="event-submit">Inject Incident</button>
+              <button type="submit" class="btn btn-accent btn-full">Inject Incident</button>
             </form>
 
-            <section class="event-stream" aria-label="Active incidents">
+            <div class="event-stream">
               <div class="event-stream-header">
-                <h3>Active incidents</h3>
-                <span id="eventCountBadge" class="count-badge">0 live</span>
+                <span class="event-stream-title">Active incidents</span>
               </div>
-              <div id="activeEvents" class="event-list" aria-live="polite">No active incidents.</div>
-            </section>
+              <div id="activeEvents" class="event-list" aria-live="polite">
+                <p class="event-empty">No active incidents.</p>
+              </div>
+            </div>
           </section>
         </section>
       </main>
     </div>
 
-    <script src="main.js" type="module"></script>
+    <script src="/src/main.ts" type="module"></script>
   </body>
 </html>

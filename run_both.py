@@ -1,47 +1,49 @@
 #!/usr/bin/env python3
-"""Run both frontend and backend servers concurrently."""
-
-import multiprocessing
+import os
+import subprocess
 import sys
 
 
-def run_backend() -> None:
-    from citysim.server import run
+def main() -> None:
+    backend_dir = os.path.dirname(os.path.abspath(__file__))
+    frontend_dir = os.path.join(backend_dir, "frontend")
+    venv_python = os.path.join(backend_dir, ".venv", "bin", "python")
 
-    run()
+    if not os.path.isfile(venv_python):
+        print("ERROR: .venv not found. Run: python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'", file=sys.stderr)
+        sys.exit(1)
 
+    npm_bin = os.path.join(frontend_dir, "node_modules", ".bin", "npm")
+    if not os.path.isfile(npm_bin):
+        npm_bin = "npm"
 
-def run_frontend() -> None:
-    import os
-    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    backend_proc = subprocess.Popen(
+        [venv_python, "run_backend.py"],
+        cwd=backend_dir,
+    )
 
-    os.chdir("frontend")
-    server = ThreadingHTTPServer(("0.0.0.0", 8080), SimpleHTTPRequestHandler)
-    print("Frontend server running at http://localhost:8080")
-    server.serve_forever()
+    frontend_proc = subprocess.Popen(
+        [npm_bin, "run", "dev"],
+        cwd=frontend_dir,
+    )
+
+    print("Both servers started. Press Ctrl+C to stop.")
+    print("- Backend:  http://localhost:8000")
+    print("- Frontend: http://localhost:8080")
+    print("- API docs: http://localhost:8000/docs")
+
+    try:
+        backend_proc.wait()
+        frontend_proc.wait()
+    except KeyboardInterrupt:
+        print("\nShutting down servers...")
+        backend_proc.terminate()
+        frontend_proc.terminate()
+        backend_proc.wait(timeout=5)
+        frontend_proc.wait(timeout=5)
+        print("Servers stopped.")
+        sys.exit(0)
 
 
 if __name__ == "__main__":
-    multiprocessing.set_start_method("spawn", force=True)
-
-    backend_process = multiprocessing.Process(target=run_backend, name="backend")
-    frontend_process = multiprocessing.Process(target=run_frontend, name="frontend")
-
-    backend_process.start()
-    frontend_process.start()
-
-    print("Both servers started. Press Ctrl+C to stop.")
-    print("- Backend: http://localhost:8000")
-    print("- Frontend: http://localhost:8080")
-
-    try:
-        backend_process.join()
-        frontend_process.join()
-    except KeyboardInterrupt:
-        print("\nShutting down servers...")
-        backend_process.terminate()
-        frontend_process.terminate()
-        backend_process.join()
-        frontend_process.join()
-        print("Servers stopped.")
-        sys.exit(0)
+    main()

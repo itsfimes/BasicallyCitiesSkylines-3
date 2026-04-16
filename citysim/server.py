@@ -1,48 +1,94 @@
 from __future__ import annotations
 
-import json
-import threading
-import time
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
 from typing import Any
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field
 
 from citysim.factory import build_simulation, build_simulation_from_import
 from citysim.importer import import_osm_overpass_bbox
 from citysim.types import EventType, SimulationEvent
 
+logger = logging.getLogger("citysim.server")
 
 ALLOWED_EVENT_TYPES = {"accident", "road_closure", "concert", "extreme_weather", "outage"}
 
 
+class ResetPayload(BaseModel):
+    seed: int = Field(default=42, ge=0)
+    resident_count: int = Field(default=2500, ge=1, le=50000)
+
+
+class StepPayload(BaseModel):
+    count: int = Field(default=1, ge=1, le=500)
+
+
+class EventPayload(BaseModel):
+    event_id: str
+    event_type: str
+    duration_minutes: int = Field(ge=1, le=1440)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class RuntimePayload(BaseModel):
+    running: bool | None = None
+    speed_multiplier: float | None = Field(default=None, ge=0.25, le=20.0)
+
+
+class OsmImportPayload(BaseModel):
+    south: float
+    west: float
+    north: float
+    east: float
+    seed: int = Field(default=42, ge=0)
+    resident_count: int = Field(default=1500, ge=1, le=50000)
+
+
 def parse_event_type(value: str) -> EventType:
-    if value == "accident":
-        return "accident"
-    if value == "road_closure":
-        return "road_closure"
-    if value == "concert":
-        return "concert"
-    if value == "extreme_weather":
-        return "extreme_weather"
-    if value == "outage":
-        return "outage"
+    if value in ALLOWED_EVENT_TYPES:
+        return value  # type: ignore[return-value]
     raise ValueError(f"Unsupported event_type: {value}")
 
 
 class SimulationRuntime:
     def __init__(self) -> None:
-        self.lock = threading.Lock()
+        self.lock = asyncio.Lock()
         self.simulation = build_simulation(seed=42, resident_count=2500)
         self.running = True
         self.tick_seconds = 1.0
+        self._subscribers: list[asyncio.Queue[dict[str, Any]]] = []
 
-    def reset(self, seed: int, resident_count: int) -> None:
-        with self.lock:
+    def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=64)
+        self._subscribers.append(queue)
+        return queue
+
+    def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
+        with suppress(ValueError):
+            self._subscribers.remove(queue)
+
+    async def broadcast(self, data: dict[str, Any]) -> None:
+        dead: list[asyncio.Queue[dict[str, Any]]] = []
+        for queue in self._subscribers:
+            try:
+                queue.put_nowait(data)
+            except asyncio.QueueFull:
+                dead.append(queue)
+        for queue in dead:
+            self.unsubscribe(queue)
+
+    async def reset(self, seed: int, resident_count: int) -> None:
+        async with self.lock:
             self.simulation = build_simulation(seed=seed, resident_count=resident_count)
+        logger.info("Simulation reset: seed=%d, residents=%d", seed, resident_count)
 
-    def step(self, count: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    async def step(self, count: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         metrics: list[dict[str, Any]] = []
-        with self.lock:
+        async with self.lock:
             if self.running:
                 raise RuntimeError("Manual stepping is disabled while live mode is running")
             for _ in range(count):
@@ -59,23 +105,74 @@ class SimulationRuntime:
             state = self.simulation.snapshot()
         return metrics, state
 
-    def advance_background_tick(self) -> bool:
-        with self.lock:
+    async def advance_background_tick(self) -> bool:
+        async with self.lock:
             if not self.running:
                 return False
-            self.simulation.step(delta_seconds=1.0)
-            return True
+            self.simulation.step(delta_seconds=self.tick_seconds)
+        state = self.snapshot()
+        await self.broadcast({"type": "tick", "state": state})
+        return True
 
     def snapshot(self) -> dict[str, Any]:
-        with self.lock:
-            return self.simulation.snapshot()
+        return self.simulation.snapshot()
 
-    def inject_event(self, payload: dict[str, Any]) -> None:
+    def snapshot_summary(self) -> dict[str, Any]:
+        sim = self.simulation
+        return {
+            "minute": sim.minute,
+            "sim_time_seconds": round(sim.sim_time_seconds, 3),
+            "seed": sim.seed,
+            "weather": sim.weather.value,
+            "active_events": [
+                {
+                    "event_id": event.event_id,
+                    "event_type": event.event_type,
+                    "start_minute": event.start_minute,
+                    "duration_minutes": event.duration_minutes,
+                    "payload": event.payload,
+                }
+                for event in sim.active_events
+            ],
+            "graph": {
+                "nodes": [
+                    {"node_id": node.node_id, "x": node.x, "y": node.y}
+                    for node in sim.graph.nodes.values()
+                ],
+                "edges": [
+                    {
+                        "edge_id": edge.edge_id,
+                        "source": edge.source,
+                        "target": edge.target,
+                        "distance_m": edge.distance_m,
+                        "blocked": edge.blocked,
+                        "congestion": edge.congestion,
+                    }
+                    for edge in sim.graph.edges.values()
+                ],
+            },
+            "last_metrics": {
+                "sim_time_minute": sim.last_metrics.sim_time_minute,
+                "traffic_density": sim.last_metrics.traffic_density,
+                "avg_delay_minutes": sim.last_metrics.avg_delay_minutes,
+                "emissions_kg_co2": sim.last_metrics.emissions_kg_co2,
+                "energy_kwh": sim.last_metrics.energy_kwh,
+            }
+            if sim.last_metrics is not None
+            else None,
+            "resident_summary": {
+                "total": len(sim.residents),
+                "moving": sum(1 for r in sim.residents.values() if r.moving_edge_id is not None),
+                "delayed": sum(1 for r in sim.residents.values() if r.delayed_minutes > 0),
+            },
+        }
+
+    async def inject_event(self, payload: dict[str, Any]) -> None:
         event_type_raw = str(payload["event_type"])
         if event_type_raw not in ALLOWED_EVENT_TYPES:
             raise ValueError(f"Unsupported event_type: {event_type_raw}")
         event_type = parse_event_type(event_type_raw)
-        with self.lock:
+        async with self.lock:
             start_minute_raw = payload.get("start_minute")
             if start_minute_raw is None:
                 start_minute = int(self.simulation.sim_time_seconds // 60)
@@ -89,23 +186,23 @@ class SimulationRuntime:
                 payload=dict(payload.get("payload", {})),
             )
             self.simulation.inject_event(event)
+        logger.info("Event injected: %s (%s) at minute %d", event.event_id, event.event_type, start_minute)
 
-    def replay_log(self) -> list[dict[str, Any]]:
-        with self.lock:
-            return list(self.simulation.event_log)
+    def replay_log(self, limit: int = 200, offset: int = 0) -> list[dict[str, Any]]:
+        log = list(self.simulation.event_log)
+        return log[offset : offset + limit]
 
     def runtime_status(self) -> dict[str, Any]:
-        with self.lock:
-            speed_multiplier = round(max(0.1, 1.0 / max(0.05, self.tick_seconds)), 3)
-            return {
-                "running": self.running,
-                "tick_seconds": self.tick_seconds,
-                "speed_multiplier": speed_multiplier,
-            }
+        speed_multiplier = round(max(0.1, 1.0 / max(0.05, self.tick_seconds)), 3)
+        return {
+            "running": self.running,
+            "tick_seconds": self.tick_seconds,
+            "speed_multiplier": speed_multiplier,
+        }
 
-    def force_step(self, count: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    async def force_step(self, count: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         metrics: list[dict[str, Any]] = []
-        with self.lock:
+        async with self.lock:
             for _ in range(count):
                 current = self.simulation.step(delta_seconds=1.0)
                 metrics.append(
@@ -120,8 +217,10 @@ class SimulationRuntime:
             state = self.simulation.snapshot()
         return metrics, state
 
-    def configure_runtime(self, running: bool | None = None, speed_multiplier: float | None = None) -> dict[str, Any]:
-        with self.lock:
+    async def configure_runtime(
+        self, running: bool | None = None, speed_multiplier: float | None = None
+    ) -> dict[str, Any]:
+        async with self.lock:
             if running is not None:
                 self.running = bool(running)
             if speed_multiplier is not None:
@@ -134,118 +233,16 @@ class SimulationRuntime:
                 "speed_multiplier": speed_multiplier_value,
             }
 
-    def import_osm_bbox(self, south: float, west: float, north: float, east: float, seed: int, resident_count: int) -> None:
+    async def import_osm_bbox(
+        self, south: float, west: float, north: float, east: float, seed: int, resident_count: int
+    ) -> None:
         imported = import_osm_overpass_bbox(south=south, west=west, north=north, east=east)
-        with self.lock:
+        async with self.lock:
             self.simulation = build_simulation_from_import(imported, seed=seed, resident_count=resident_count)
+        logger.info("OSM import complete: bbox(%.4f,%.4f,%.4f,%.4f)", south, west, north, east)
 
 
 runtime = SimulationRuntime()
-
-
-class CitySimHandler(BaseHTTPRequestHandler):
-    def _send(self, payload: dict[str, Any], status: int = HTTPStatus.OK) -> None:
-        body = json.dumps(payload).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _read_json(self) -> dict[str, Any]:
-        length = int(self.headers.get("Content-Length", "0"))
-        raw = self.rfile.read(length) if length > 0 else b"{}"
-        try:
-            data = json.loads(raw.decode("utf-8"))
-        except json.JSONDecodeError as error:
-            raise ValueError(f"Invalid JSON: {error.msg}") from error
-        if not isinstance(data, dict):
-            raise ValueError("Invalid JSON payload")
-        return data
-
-    def _send_error_json(self, status: int, message: str) -> None:
-        self._send({"error": message}, status=status)
-
-    def do_OPTIONS(self) -> None:
-        self.send_response(HTTPStatus.NO_CONTENT)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-
-    def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/health":
-            self._send({"status": "ok"})
-            return
-        if self.path == "/api/state":
-            self._send({"state": runtime.snapshot()})
-            return
-        if self.path == "/api/logs":
-            self._send({"logs": runtime.replay_log()})
-            return
-        if self.path == "/api/runtime":
-            self._send({"runtime": runtime.runtime_status()})
-            return
-        self._send({"error": "not_found"}, status=HTTPStatus.NOT_FOUND)
-
-    def do_POST(self) -> None:  # noqa: N802
-        try:
-            if self.path == "/api/reset":
-                payload = self._read_json()
-                seed = int(payload.get("seed", 42))
-                residents = int(payload.get("resident_count", 2500))
-                runtime.reset(seed=seed, resident_count=residents)
-                self._send({"status": "reset", "seed": seed, "resident_count": residents})
-                return
-            if self.path == "/api/step":
-                payload = self._read_json()
-                count = int(payload.get("count", 1))
-                count = max(1, min(500, count))
-                if runtime.runtime_status()["running"]:
-                    raise RuntimeError("Manual stepping is disabled while live mode is running")
-                metrics, state = runtime.force_step(count=count)
-                self._send({"status": "ok", "metrics": metrics, "state": state})
-                return
-            if self.path == "/api/event":
-                payload = self._read_json()
-                validate_event_payload(payload)
-                runtime.inject_event(payload)
-                self._send({"status": "event_injected", "event_id": payload.get("event_id")})
-                return
-            if self.path == "/api/runtime":
-                payload = self._read_json()
-                running_value = payload.get("running")
-                speed_value = payload.get("speed_multiplier")
-                if running_value is not None and not isinstance(running_value, bool):
-                    raise ValueError("running must be a boolean")
-                running = running_value if isinstance(running_value, bool) else None
-                speed_multiplier = float(speed_value) if speed_value is not None else None
-                status = runtime.configure_runtime(running=running, speed_multiplier=speed_multiplier)
-                self._send({"status": "runtime_updated", "runtime": status})
-                return
-            if self.path == "/api/import/osm-bbox":
-                payload = self._read_json()
-                runtime.import_osm_bbox(
-                    south=float(payload["south"]),
-                    west=float(payload["west"]),
-                    north=float(payload["north"]),
-                    east=float(payload["east"]),
-                    seed=int(payload.get("seed", 42)),
-                    resident_count=int(payload.get("resident_count", 1500)),
-                )
-                self._send({"status": "imported_osm_bbox"})
-                return
-            self._send({"error": "not_found"}, status=HTTPStatus.NOT_FOUND)
-        except (ValueError, KeyError, RuntimeError) as error:
-            status = HTTPStatus.CONFLICT if isinstance(error, RuntimeError) else HTTPStatus.BAD_REQUEST
-            self._send_error_json(status=status, message=str(error))
-
-
-def _background_loop() -> None:
-    while True:
-        time.sleep(runtime.tick_seconds)
-        runtime.advance_background_tick()
 
 
 def validate_event_payload(payload: dict[str, Any]) -> None:
@@ -267,18 +264,158 @@ def validate_event_payload(payload: dict[str, Any]) -> None:
         raise ValueError("payload.weather is required for extreme_weather")
 
 
-def create_app() -> ThreadingHTTPServer:
-    return ThreadingHTTPServer(("0.0.0.0", 8000), CitySimHandler)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(background_tick_loop())
+    logger.info("CitySim server starting")
+    yield
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+    logger.info("CitySim server stopped")
+
+
+app = FastAPI(title="CitySim API", version="1.0.0", lifespan=lifespan)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.get("/api/state")
+async def get_state():
+    return {"state": runtime.snapshot()}
+
+
+@app.get("/api/state/summary")
+async def get_state_summary():
+    return {"state": runtime.snapshot_summary()}
+
+
+@app.get("/api/residents")
+async def get_residents(
+    limit: int = Query(default=100, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
+):
+    sim = runtime.simulation
+    residents = list(sim.residents.values())
+    page = residents[offset : offset + limit]
+    return {
+        "total": len(residents),
+        "limit": limit,
+        "offset": offset,
+        "residents": [
+            {
+                "resident_id": r.resident_id,
+                "current_node_id": r.current_node_id,
+                "mode": r.mode,
+                "behavior_profile": r.behavior_profile,
+                "activity": r.current_activity,
+                "delayed_minutes": r.delayed_minutes,
+                "moving_edge_id": r.moving_edge_id,
+                "moving_total_seconds": round(r.moving_total_seconds, 3),
+                "moving_remaining_seconds": round(max(0.0, r.moving_remaining_seconds), 3),
+            }
+            for r in page
+        ],
+    }
+
+
+@app.get("/api/logs")
+async def get_logs(
+    limit: int = Query(default=200, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+):
+    return {"logs": runtime.replay_log(limit=limit, offset=offset)}
+
+
+@app.get("/api/runtime")
+async def get_runtime():
+    return {"runtime": runtime.runtime_status()}
+
+
+@app.post("/api/reset")
+async def reset_simulation(payload: ResetPayload):
+    await runtime.reset(seed=payload.seed, resident_count=payload.resident_count)
+    return {"status": "reset", "seed": payload.seed, "resident_count": payload.resident_count}
+
+
+@app.post("/api/step")
+async def step_simulation(payload: StepPayload):
+    if runtime.running:
+        raise HTTPException(status_code=409, detail="Manual stepping is disabled while live mode is running")
+    metrics, state = await runtime.force_step(count=payload.count)
+    return {"status": "ok", "metrics": metrics, "state": state}
+
+
+@app.post("/api/event")
+async def inject_event(payload: EventPayload):
+    data = payload.model_dump()
+    validate_event_payload(data)
+    await runtime.inject_event(data)
+    return {"status": "event_injected", "event_id": payload.event_id}
+
+
+@app.post("/api/runtime")
+async def configure_runtime(payload: RuntimePayload):
+    status = await runtime.configure_runtime(
+        running=payload.running,
+        speed_multiplier=payload.speed_multiplier,
+    )
+    return {"status": "runtime_updated", "runtime": status}
+
+
+@app.post("/api/import/osm-bbox")
+async def import_osm_bbox(payload: OsmImportPayload):
+    await runtime.import_osm_bbox(
+        south=payload.south,
+        west=payload.west,
+        north=payload.north,
+        east=payload.east,
+        seed=payload.seed,
+        resident_count=payload.resident_count,
+    )
+    return {"status": "imported_osm_bbox"}
+
+
+@app.websocket("/ws/state")
+async def websocket_state(websocket: WebSocket):
+    await websocket.accept()
+    queue = runtime.subscribe()
+    try:
+        while True:
+            try:
+                data = await asyncio.wait_for(queue.get(), timeout=30.0)
+                await websocket.send_json(data)
+            except TimeoutError:
+                await websocket.send_json({"type": "ping"})
+    except (WebSocketDisconnect, ConnectionError):
+        pass
+    finally:
+        runtime.unsubscribe(queue)
+
+
+async def background_tick_loop() -> None:
+    try:
+        while True:
+            await asyncio.sleep(runtime.tick_seconds)
+            await runtime.advance_background_tick()
+    except asyncio.CancelledError:
+        pass
+
+
+def setup_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
 
 def run() -> None:
-    thread = threading.Thread(target=_background_loop, daemon=True)
-    thread.start()
-    server = create_app()
-    try:
-        server.serve_forever()
-    finally:
-        server.server_close()
+    setup_logging()
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
 
 
 if __name__ == "__main__":

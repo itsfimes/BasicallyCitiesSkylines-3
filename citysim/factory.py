@@ -10,7 +10,6 @@ from citysim.randomness import SeededRandom
 from citysim.simulation import CitySimulation
 from citysim.types import BehaviorProfile, Building, Edge, Node, Resident, SimulationEvent, TransportMode
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 
@@ -52,7 +51,9 @@ def build_simulation(seed: int = 42, resident_count: int = 2000) -> CitySimulati
     )
 
 
-def build_simulation_from_import(imported: ImportedCityData, seed: int = 42, resident_count: int = 2000) -> CitySimulation:
+def build_simulation_from_import(
+    imported: ImportedCityData, seed: int = 42, resident_count: int = 2000
+) -> CitySimulation:
     rng = SeededRandom(seed)
     residents = generate_residents(imported.graph, imported.buildings, resident_count, rng)
     scenario = load_default_scenario()
@@ -79,8 +80,12 @@ def generate_residents(
 
     if not home_buildings or not (work_buildings or school_buildings or leisure_buildings):
         fallback_node = next(iter(graph.nodes.values())).node_id
-        home_building = Building(building_id="home_fallback", node_id=fallback_node, kind="home", capacity=resident_count)
-        work_building = Building(building_id="work_fallback", node_id=fallback_node, kind="work", capacity=resident_count)
+        home_building = Building(
+            building_id="home_fallback", node_id=fallback_node, kind="home", capacity=resident_count
+        )
+        work_building = Building(
+            building_id="work_fallback", node_id=fallback_node, kind="work", capacity=resident_count
+        )
         home_buildings = [home_building]
         work_buildings = [work_building]
         school_buildings = [work_building]

@@ -1,28 +1,913 @@
 {
   "nodes": [
-    {"node_id": "n1", "x": 14.4200, "y": 50.0870},
-    {"node_id": "n2", "x": 14.4250, "y": 50.0875},
-    {"node_id": "n3", "x": 14.4300, "y": 50.0880},
-    {"node_id": "n4", "x": 14.4340, "y": 50.0860},
-    {"node_id": "n5", "x": 14.4280, "y": 50.0845},
-    {"node_id": "n6", "x": 14.4220, "y": 50.0840}
+    {
+      "node_id": "n1",
+      "x": 14.4103,
+      "y": 50.0825
+    },
+    {
+      "node_id": "n2",
+      "x": 14.4171,
+      "y": 50.0827
+    },
+    {
+      "node_id": "n3",
+      "x": 14.4255,
+      "y": 50.0832
+    },
+    {
+      "node_id": "n4",
+      "x": 14.4333,
+      "y": 50.0826
+    },
+    {
+      "node_id": "n5",
+      "x": 14.4398,
+      "y": 50.0825
+    },
+    {
+      "node_id": "n6",
+      "x": 14.4094,
+      "y": 50.0848
+    },
+    {
+      "node_id": "n7",
+      "x": 14.4166,
+      "y": 50.0844
+    },
+    {
+      "node_id": "n8",
+      "x": 14.4253,
+      "y": 50.0848
+    },
+    {
+      "node_id": "n9",
+      "x": 14.4319,
+      "y": 50.0848
+    },
+    {
+      "node_id": "n10",
+      "x": 14.4406,
+      "y": 50.0843
+    },
+    {
+      "node_id": "n11",
+      "x": 14.4106,
+      "y": 50.0867
+    },
+    {
+      "node_id": "n12",
+      "x": 14.4172,
+      "y": 50.0862
+    },
+    {
+      "node_id": "n13",
+      "x": 14.4259,
+      "y": 50.0863
+    },
+    {
+      "node_id": "n14",
+      "x": 14.4317,
+      "y": 50.0861
+    },
+    {
+      "node_id": "n15",
+      "x": 14.4407,
+      "y": 50.0866
+    },
+    {
+      "node_id": "n16",
+      "x": 14.4106,
+      "y": 50.0885
+    },
+    {
+      "node_id": "n17",
+      "x": 14.4176,
+      "y": 50.0887
+    },
+    {
+      "node_id": "n18",
+      "x": 14.4248,
+      "y": 50.0883
+    },
+    {
+      "node_id": "n19",
+      "x": 14.4332,
+      "y": 50.0884
+    },
+    {
+      "node_id": "n20",
+      "x": 14.4407,
+      "y": 50.0883
+    },
+    {
+      "node_id": "n21",
+      "x": 14.4104,
+      "y": 50.0895
+    },
+    {
+      "node_id": "n22",
+      "x": 14.417,
+      "y": 50.0898
+    },
+    {
+      "node_id": "n23",
+      "x": 14.4242,
+      "y": 50.0897
+    },
+    {
+      "node_id": "n24",
+      "x": 14.4317,
+      "y": 50.0898
+    },
+    {
+      "node_id": "n25",
+      "x": 14.4403,
+      "y": 50.0899
+    }
   ],
   "edges": [
-    {"edge_id": "e1", "source": "n1", "target": "n2", "distance_m": 420, "lanes": 2, "base_speed_kph": 45, "capacity_per_minute": 30, "quality": 0.95},
-    {"edge_id": "e2", "source": "n2", "target": "n3", "distance_m": 390, "lanes": 2, "base_speed_kph": 50, "capacity_per_minute": 32, "quality": 0.95},
-    {"edge_id": "e3", "source": "n3", "target": "n4", "distance_m": 500, "lanes": 2, "base_speed_kph": 40, "capacity_per_minute": 26, "quality": 0.85},
-    {"edge_id": "e4", "source": "n4", "target": "n5", "distance_m": 450, "lanes": 1, "base_speed_kph": 35, "capacity_per_minute": 18, "quality": 0.8},
-    {"edge_id": "e5", "source": "n5", "target": "n6", "distance_m": 390, "lanes": 1, "base_speed_kph": 35, "capacity_per_minute": 18, "quality": 0.8},
-    {"edge_id": "e6", "source": "n6", "target": "n1", "distance_m": 360, "lanes": 1, "base_speed_kph": 30, "capacity_per_minute": 15, "quality": 0.75},
-    {"edge_id": "e7", "source": "n2", "target": "n5", "distance_m": 640, "lanes": 1, "base_speed_kph": 30, "capacity_per_minute": 14, "quality": 0.75},
-    {"edge_id": "e8", "source": "n5", "target": "n2", "distance_m": 640, "lanes": 1, "base_speed_kph": 30, "capacity_per_minute": 14, "quality": 0.75},
-    {"edge_id": "e9", "source": "n6", "target": "n3", "distance_m": 720, "lanes": 1, "base_speed_kph": 35, "capacity_per_minute": 16, "quality": 0.82}
+    {
+      "edge_id": "e1",
+      "source": "n1",
+      "target": "n2",
+      "distance_m": 486,
+      "lanes": 2,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 20,
+      "quality": 0.97
+    },
+    {
+      "edge_id": "e3",
+      "source": "n1",
+      "target": "n6",
+      "distance_m": 264,
+      "lanes": 1,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 12,
+      "quality": 0.73
+    },
+    {
+      "edge_id": "e4",
+      "source": "n6",
+      "target": "n1",
+      "distance_m": 264,
+      "lanes": 3,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 30,
+      "quality": 0.92
+    },
+    {
+      "edge_id": "e2",
+      "source": "n2",
+      "target": "n3",
+      "distance_m": 603,
+      "lanes": 2,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 20,
+      "quality": 0.82
+    },
+    {
+      "edge_id": "e5",
+      "source": "n3",
+      "target": "n2",
+      "distance_m": 603,
+      "lanes": 2,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 24,
+      "quality": 0.95
+    },
+    {
+      "edge_id": "e6",
+      "source": "n2",
+      "target": "n7",
+      "distance_m": 193,
+      "lanes": 2,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 16,
+      "quality": 0.84
+    },
+    {
+      "edge_id": "e8",
+      "source": "n3",
+      "target": "n4",
+      "distance_m": 561,
+      "lanes": 1,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 12,
+      "quality": 0.78
+    },
+    {
+      "edge_id": "e9",
+      "source": "n3",
+      "target": "n8",
+      "distance_m": 179,
+      "lanes": 3,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 24,
+      "quality": 0.74
+    },
+    {
+      "edge_id": "e10",
+      "source": "n4",
+      "target": "n5",
+      "distance_m": 464,
+      "lanes": 1,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 12,
+      "quality": 0.96
+    },
+    {
+      "edge_id": "e11",
+      "source": "n5",
+      "target": "n4",
+      "distance_m": 464,
+      "lanes": 3,
+      "base_speed_kph": 40,
+      "capacity_per_minute": 30,
+      "quality": 0.71
+    },
+    {
+      "edge_id": "e12",
+      "source": "n4",
+      "target": "n9",
+      "distance_m": 265,
+      "lanes": 2,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 20,
+      "quality": 0.77
+    },
+    {
+      "edge_id": "e13",
+      "source": "n5",
+      "target": "n10",
+      "distance_m": 208,
+      "lanes": 1,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 8,
+      "quality": 0.72
+    },
+    {
+      "edge_id": "e14",
+      "source": "n10",
+      "target": "n5",
+      "distance_m": 208,
+      "lanes": 2,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 16,
+      "quality": 0.97
+    },
+    {
+      "edge_id": "e15",
+      "source": "n6",
+      "target": "n7",
+      "distance_m": 516,
+      "lanes": 3,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 24,
+      "quality": 0.74
+    },
+    {
+      "edge_id": "e16",
+      "source": "n6",
+      "target": "n11",
+      "distance_m": 228,
+      "lanes": 2,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 16,
+      "quality": 0.77
+    },
+    {
+      "edge_id": "e17",
+      "source": "n7",
+      "target": "n8",
+      "distance_m": 623,
+      "lanes": 3,
+      "base_speed_kph": 45,
+      "capacity_per_minute": 24,
+      "quality": 0.96
+    },
+    {
+      "edge_id": "e18",
+      "source": "n7",
+      "target": "n12",
+      "distance_m": 205,
+      "lanes": 1,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 10,
+      "quality": 0.81
+    },
+    {
+      "edge_id": "e19",
+      "source": "n8",
+      "target": "n9",
+      "distance_m": 471,
+      "lanes": 2,
+      "base_speed_kph": 45,
+      "capacity_per_minute": 24,
+      "quality": 0.83
+    },
+    {
+      "edge_id": "e20",
+      "source": "n8",
+      "target": "n13",
+      "distance_m": 172,
+      "lanes": 1,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 8,
+      "quality": 0.79
+    },
+    {
+      "edge_id": "e21",
+      "source": "n9",
+      "target": "n10",
+      "distance_m": 624,
+      "lanes": 3,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 24,
+      "quality": 0.86
+    },
+    {
+      "edge_id": "e22",
+      "source": "n9",
+      "target": "n14",
+      "distance_m": 145,
+      "lanes": 1,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 12,
+      "quality": 0.88
+    },
+    {
+      "edge_id": "e23",
+      "source": "n14",
+      "target": "n9",
+      "distance_m": 145,
+      "lanes": 1,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 8,
+      "quality": 0.94
+    },
+    {
+      "edge_id": "e24",
+      "source": "n10",
+      "target": "n15",
+      "distance_m": 256,
+      "lanes": 1,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 8,
+      "quality": 0.78
+    },
+    {
+      "edge_id": "e25",
+      "source": "n15",
+      "target": "n10",
+      "distance_m": 256,
+      "lanes": 2,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 24,
+      "quality": 0.74
+    },
+    {
+      "edge_id": "e26",
+      "source": "n11",
+      "target": "n12",
+      "distance_m": 475,
+      "lanes": 3,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 30,
+      "quality": 0.77
+    },
+    {
+      "edge_id": "e27",
+      "source": "n12",
+      "target": "n11",
+      "distance_m": 475,
+      "lanes": 2,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 20,
+      "quality": 0.75
+    },
+    {
+      "edge_id": "e28",
+      "source": "n11",
+      "target": "n16",
+      "distance_m": 200,
+      "lanes": 1,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 10,
+      "quality": 0.8
+    },
+    {
+      "edge_id": "e29",
+      "source": "n16",
+      "target": "n11",
+      "distance_m": 200,
+      "lanes": 2,
+      "base_speed_kph": 45,
+      "capacity_per_minute": 24,
+      "quality": 0.72
+    },
+    {
+      "edge_id": "e30",
+      "source": "n12",
+      "target": "n13",
+      "distance_m": 622,
+      "lanes": 1,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 10,
+      "quality": 0.9
+    },
+    {
+      "edge_id": "e31",
+      "source": "n13",
+      "target": "n12",
+      "distance_m": 622,
+      "lanes": 1,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 8,
+      "quality": 0.75
+    },
+    {
+      "edge_id": "e32",
+      "source": "n12",
+      "target": "n17",
+      "distance_m": 280,
+      "lanes": 2,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 20,
+      "quality": 0.75
+    },
+    {
+      "edge_id": "e33",
+      "source": "n13",
+      "target": "n14",
+      "distance_m": 415,
+      "lanes": 2,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 16,
+      "quality": 0.82
+    },
+    {
+      "edge_id": "e34",
+      "source": "n13",
+      "target": "n18",
+      "distance_m": 236,
+      "lanes": 3,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 24,
+      "quality": 0.88
+    },
+    {
+      "edge_id": "e35",
+      "source": "n14",
+      "target": "n15",
+      "distance_m": 645,
+      "lanes": 3,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 24,
+      "quality": 0.97
+    },
+    {
+      "edge_id": "e36",
+      "source": "n14",
+      "target": "n19",
+      "distance_m": 278,
+      "lanes": 1,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 10,
+      "quality": 0.84
+    },
+    {
+      "edge_id": "e37",
+      "source": "n15",
+      "target": "n20",
+      "distance_m": 189,
+      "lanes": 1,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 10,
+      "quality": 0.95
+    },
+    {
+      "edge_id": "e38",
+      "source": "n16",
+      "target": "n17",
+      "distance_m": 500,
+      "lanes": 1,
+      "base_speed_kph": 45,
+      "capacity_per_minute": 8,
+      "quality": 0.98
+    },
+    {
+      "edge_id": "e39",
+      "source": "n16",
+      "target": "n21",
+      "distance_m": 112,
+      "lanes": 2,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 20,
+      "quality": 0.78
+    },
+    {
+      "edge_id": "e40",
+      "source": "n21",
+      "target": "n16",
+      "distance_m": 112,
+      "lanes": 3,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 36,
+      "quality": 0.84
+    },
+    {
+      "edge_id": "e41",
+      "source": "n17",
+      "target": "n18",
+      "distance_m": 516,
+      "lanes": 1,
+      "base_speed_kph": 40,
+      "capacity_per_minute": 8,
+      "quality": 0.97
+    },
+    {
+      "edge_id": "e42",
+      "source": "n18",
+      "target": "n17",
+      "distance_m": 516,
+      "lanes": 3,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 36,
+      "quality": 0.72
+    },
+    {
+      "edge_id": "e43",
+      "source": "n17",
+      "target": "n22",
+      "distance_m": 130,
+      "lanes": 2,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 16,
+      "quality": 0.86
+    },
+    {
+      "edge_id": "e44",
+      "source": "n18",
+      "target": "n19",
+      "distance_m": 600,
+      "lanes": 3,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 36,
+      "quality": 0.74
+    },
+    {
+      "edge_id": "e45",
+      "source": "n19",
+      "target": "n18",
+      "distance_m": 600,
+      "lanes": 3,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 24,
+      "quality": 0.72
+    },
+    {
+      "edge_id": "e46",
+      "source": "n18",
+      "target": "n23",
+      "distance_m": 162,
+      "lanes": 1,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 8,
+      "quality": 0.81
+    },
+    {
+      "edge_id": "e47",
+      "source": "n19",
+      "target": "n20",
+      "distance_m": 536,
+      "lanes": 3,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 36,
+      "quality": 0.87
+    },
+    {
+      "edge_id": "e48",
+      "source": "n19",
+      "target": "n24",
+      "distance_m": 189,
+      "lanes": 3,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 30,
+      "quality": 0.88
+    },
+    {
+      "edge_id": "e49",
+      "source": "n20",
+      "target": "n25",
+      "distance_m": 180,
+      "lanes": 3,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 30,
+      "quality": 0.96
+    },
+    {
+      "edge_id": "e50",
+      "source": "n25",
+      "target": "n20",
+      "distance_m": 180,
+      "lanes": 1,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 12,
+      "quality": 0.79
+    },
+    {
+      "edge_id": "e51",
+      "source": "n21",
+      "target": "n22",
+      "distance_m": 473,
+      "lanes": 2,
+      "base_speed_kph": 45,
+      "capacity_per_minute": 16,
+      "quality": 0.89
+    },
+    {
+      "edge_id": "e52",
+      "source": "n22",
+      "target": "n23",
+      "distance_m": 514,
+      "lanes": 2,
+      "base_speed_kph": 45,
+      "capacity_per_minute": 20,
+      "quality": 0.96
+    },
+    {
+      "edge_id": "e53",
+      "source": "n23",
+      "target": "n24",
+      "distance_m": 536,
+      "lanes": 1,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 10,
+      "quality": 0.87
+    },
+    {
+      "edge_id": "e54",
+      "source": "n24",
+      "target": "n23",
+      "distance_m": 536,
+      "lanes": 3,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 24,
+      "quality": 0.85
+    },
+    {
+      "edge_id": "e55",
+      "source": "n24",
+      "target": "n25",
+      "distance_m": 614,
+      "lanes": 3,
+      "base_speed_kph": 40,
+      "capacity_per_minute": 24,
+      "quality": 0.96
+    },
+    {
+      "edge_id": "e56",
+      "source": "n25",
+      "target": "n24",
+      "distance_m": 614,
+      "lanes": 1,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 10,
+      "quality": 0.78
+    },
+    {
+      "edge_id": "e57",
+      "source": "n1",
+      "target": "n7",
+      "distance_m": 497,
+      "lanes": 2,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 24,
+      "quality": 0.9
+    },
+    {
+      "edge_id": "e58",
+      "source": "n7",
+      "target": "n1",
+      "distance_m": 497,
+      "lanes": 3,
+      "base_speed_kph": 60,
+      "capacity_per_minute": 36,
+      "quality": 0.85
+    },
+    {
+      "edge_id": "e59",
+      "source": "n13",
+      "target": "n19",
+      "distance_m": 571,
+      "lanes": 3,
+      "base_speed_kph": 40,
+      "capacity_per_minute": 36,
+      "quality": 0.73
+    },
+    {
+      "edge_id": "e60",
+      "source": "n5",
+      "target": "n9",
+      "distance_m": 620,
+      "lanes": 1,
+      "base_speed_kph": 40,
+      "capacity_per_minute": 8,
+      "quality": 0.95
+    },
+    {
+      "edge_id": "e61",
+      "source": "n12",
+      "target": "n18",
+      "distance_m": 591,
+      "lanes": 3,
+      "base_speed_kph": 35,
+      "capacity_per_minute": 30,
+      "quality": 0.78
+    },
+    {
+      "edge_id": "e62",
+      "source": "n18",
+      "target": "n12",
+      "distance_m": 591,
+      "lanes": 1,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 10,
+      "quality": 0.76
+    },
+    {
+      "edge_id": "e63",
+      "source": "n3",
+      "target": "n9",
+      "distance_m": 491,
+      "lanes": 2,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 20,
+      "quality": 0.77
+    },
+    {
+      "edge_id": "e64",
+      "source": "n9",
+      "target": "n3",
+      "distance_m": 491,
+      "lanes": 1,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 12,
+      "quality": 0.82
+    },
+    {
+      "edge_id": "e65",
+      "source": "n18",
+      "target": "n22",
+      "distance_m": 582,
+      "lanes": 2,
+      "base_speed_kph": 30,
+      "capacity_per_minute": 16,
+      "quality": 0.79
+    },
+    {
+      "edge_id": "e66",
+      "source": "n22",
+      "target": "n18",
+      "distance_m": 582,
+      "lanes": 1,
+      "base_speed_kph": 55,
+      "capacity_per_minute": 10,
+      "quality": 0.75
+    },
+    {
+      "edge_id": "e7",
+      "source": "n7",
+      "target": "n2",
+      "distance_m": 193,
+      "lanes": 2,
+      "base_speed_kph": 50,
+      "capacity_per_minute": 24,
+      "quality": 0.82
+    }
   ],
   "buildings": [
-    {"building_id": "b_home_1", "node_id": "n1", "kind": "home", "capacity": 1500},
-    {"building_id": "b_home_2", "node_id": "n6", "kind": "home", "capacity": 1200},
-    {"building_id": "b_work", "node_id": "n3", "kind": "work", "capacity": 1400},
-    {"building_id": "b_school", "node_id": "n4", "kind": "school", "capacity": 800},
-    {"building_id": "b_leisure", "node_id": "n2", "kind": "leisure", "capacity": 900}
+    {
+      "building_id": "b_home_1",
+      "node_id": "n1",
+      "kind": "home",
+      "capacity": 1500
+    },
+    {
+      "building_id": "b_home_2",
+      "node_id": "n6",
+      "kind": "home",
+      "capacity": 1200
+    },
+    {
+      "building_id": "b_home_3",
+      "node_id": "n11",
+      "kind": "home",
+      "capacity": 1800
+    },
+    {
+      "building_id": "b_home_4",
+      "node_id": "n16",
+      "kind": "home",
+      "capacity": 1400
+    },
+    {
+      "building_id": "b_home_5",
+      "node_id": "n21",
+      "kind": "home",
+      "capacity": 1600
+    },
+    {
+      "building_id": "b_work_6",
+      "node_id": "n3",
+      "kind": "work",
+      "capacity": 1400
+    },
+    {
+      "building_id": "b_work_7",
+      "node_id": "n8",
+      "kind": "work",
+      "capacity": 1200
+    },
+    {
+      "building_id": "b_work_8",
+      "node_id": "n13",
+      "kind": "work",
+      "capacity": 1600
+    },
+    {
+      "building_id": "b_work_9",
+      "node_id": "n18",
+      "kind": "work",
+      "capacity": 1100
+    },
+    {
+      "building_id": "b_school_10",
+      "node_id": "n4",
+      "kind": "school",
+      "capacity": 800
+    },
+    {
+      "building_id": "b_school_11",
+      "node_id": "n9",
+      "kind": "school",
+      "capacity": 700
+    },
+    {
+      "building_id": "b_school_12",
+      "node_id": "n19",
+      "kind": "school",
+      "capacity": 900
+    },
+    {
+      "building_id": "b_leisure_13",
+      "node_id": "n2",
+      "kind": "leisure",
+      "capacity": 900
+    },
+    {
+      "building_id": "b_leisure_14",
+      "node_id": "n7",
+      "kind": "leisure",
+      "capacity": 850
+    },
+    {
+      "building_id": "b_leisure_15",
+      "node_id": "n12",
+      "kind": "leisure",
+      "capacity": 1000
+    },
+    {
+      "building_id": "b_leisure_16",
+      "node_id": "n17",
+      "kind": "leisure",
+      "capacity": 750
+    },
+    {
+      "building_id": "b_leisure_17",
+      "node_id": "n22",
+      "kind": "leisure",
+      "capacity": 800
+    },
+    {
+      "building_id": "b_leisure_18",
+      "node_id": "n25",
+      "kind": "leisure",
+      "capacity": 950
+    },
+    {
+      "building_id": "b_home_19",
+      "node_id": "n5",
+      "kind": "home",
+      "capacity": 1100
+    },
+    {
+      "building_id": "b_work_20",
+      "node_id": "n10",
+      "kind": "work",
+      "capacity": 1300
+    }
   ]
 }
