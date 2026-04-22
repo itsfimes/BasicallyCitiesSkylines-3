@@ -1,3 +1,10 @@
+"""Shared simulation domain types used by the entire backend.
+
+This module defines the canonical data contracts exchanged between graph,
+simulation, importer, and API layers. Keep these dataclasses and literals
+stable because snapshots and frontend rendering depend on their shape.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

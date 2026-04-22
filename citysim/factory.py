@@ -1,3 +1,10 @@
+"""Simulation assembly and seed-driven population generation.
+
+Factory functions in this module bridge imported city data and scenario
+definitions into a ready-to-run CitySimulation used by server runtime reset
+and startup flows.
+"""
+
 from __future__ import annotations
 
 import json
@@ -15,11 +22,21 @@ DATA_DIR = BASE_DIR / "data"
 
 
 def load_default_city(seed: int) -> ImportedCityData:
+    """Load the default city dataset from repository data files.
+
+    Used by: build_simulation at backend startup/reset to construct the base
+    graph/building topology before residents are generated.
+    """
     _ = seed
     return import_from_json(str(DATA_DIR / "city" / "default_city.json"))
 
 
 def load_default_scenario() -> ScheduledScenario:
+    """Load the bundled scheduled event scenario from JSON.
+
+    Used by: build_simulation* to attach default timed disruptions that drive
+    observable traffic dynamics in demos and tests.
+    """
     with (DATA_DIR / "scenarios" / "traffic_collapse_concert.json").open("r", encoding="utf-8") as file:
         payload = json.load(file)
     events: list[SimulationEvent] = []
@@ -37,6 +54,11 @@ def load_default_scenario() -> ScheduledScenario:
 
 
 def build_simulation(seed: int = 42, resident_count: int = 2000) -> CitySimulation:
+    """Assemble the default simulation instance.
+
+    Used by: SimulationRuntime initialization/reset in citysim.server when no
+    external import is requested.
+    """
     imported = load_default_city(seed)
     rng = SeededRandom(seed)
     residents = generate_residents(imported.graph, imported.buildings, resident_count, rng)
@@ -54,6 +76,11 @@ def build_simulation(seed: int = 42, resident_count: int = 2000) -> CitySimulati
 def build_simulation_from_import(
     imported: ImportedCityData, seed: int = 42, resident_count: int = 2000
 ) -> CitySimulation:
+    """Assemble a simulation from imported map data.
+
+    Used by: /api/import/osm-bbox runtime flow in citysim.server to swap the
+    active city model with externally sourced topology.
+    """
     rng = SeededRandom(seed)
     residents = generate_residents(imported.graph, imported.buildings, resident_count, rng)
     scenario = load_default_scenario()
@@ -73,6 +100,11 @@ def generate_residents(
     resident_count: int,
     rng: SeededRandom,
 ) -> dict[str, Resident]:
+    """Generate seeded resident population and daily target patterns.
+
+    Used by: simulation factory builders to populate CitySimulation with agent
+    behavior profiles and initial home/mobility assignments.
+    """
     home_buildings = [building for building in buildings.values() if building.kind == "home"]
     work_buildings = [building for building in buildings.values() if building.kind == "work"]
     school_buildings = [building for building in buildings.values() if building.kind == "school"]
@@ -103,6 +135,10 @@ def generate_residents(
     profile_distribution: list[BehaviorProfile] = ["worker", "student", "leisure_oriented"]
 
     def pick_building(candidates: list[Building]) -> Building:
+        """Select one building from candidate set with seeded randomness.
+
+        Used by: generate_residents profile-specific target assignment logic.
+        """
         return candidates[rng.randint(0, len(candidates) - 1)]
 
     for index in range(resident_count):
@@ -136,6 +172,11 @@ def generate_residents(
 
 
 def build_toy_city() -> ImportedCityData:
+    """Create a minimal in-memory city graph for local experimentation.
+
+    Used by: ad-hoc debugging and potential lightweight demos that do not rely
+    on file-based import pipelines.
+    """
     nodes = {
         "n1": Node("n1", 14.4200, 50.0870),
         "n2": Node("n2", 14.4250, 50.0875),

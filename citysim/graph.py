@@ -1,3 +1,10 @@
+"""Road-network graph and routing primitives for city simulation.
+
+CitySimulation delegates shortest-path queries and edge travel-time estimates
+to this module. It also owns path cache invalidation triggered by dynamic
+events (closures, accidents, weather-driven uncertainty shifts).
+"""
+
 from __future__ import annotations
 
 import heapq
@@ -27,10 +34,20 @@ class CityGraph:
     path_cache_ttl: int = 120
 
     def neighbors(self, node_id: str) -> list[Edge]:
+        """Return outgoing edges from a node.
+
+        Used by: shortest-path search and event spread logic in simulation when
+        evaluating local network connectivity.
+        """
         edge_ids = self.adjacency.get(node_id, [])
         return [self.edges[edge_id] for edge_id in edge_ids]
 
     def edge_travel_minutes(self, edge: Edge, weather: WeatherType, uncertainty: float) -> int:
+        """Estimate travel time for an edge under current network conditions.
+
+        Used by: Dijkstra route cost computation and resident movement timing in
+        CitySimulation._advance_residents.
+        """
         if edge.blocked:
             return 10**9
         weather_factor = {
@@ -52,6 +69,11 @@ class CityGraph:
         return minutes
 
     def invalidate_path_cache(self) -> None:
+        """Drop cached routes after topology or cost changes.
+
+        Used by: event injection/expiry flows in citysim.simulation to ensure
+        routing reflects closures, accidents, and weather changes.
+        """
         self.cache_generation += 1
         self.path_cache.clear()
 
@@ -63,6 +85,11 @@ class CityGraph:
         uncertainty: float,
         tick: int = 0,
     ) -> list[str]:
+        """Return edge-id path between nodes, using bounded route caching.
+
+        Used by: resident replanning in CitySimulation whenever an agent needs
+        a new route to its selected destination.
+        """
         if source_id == target_id:
             return []
 
@@ -94,6 +121,10 @@ class CityGraph:
         weather: WeatherType,
         uncertainty: float,
     ) -> list[str]:
+        """Compute a shortest path with edge travel-time weights.
+
+        Used by: shortest_path as cache miss fallback for actual route search.
+        """
         distances: dict[str, int] = {source_id: 0}
         previous_edge: dict[str, str] = {}
         queue: list[tuple[int, str]] = [(0, source_id)]

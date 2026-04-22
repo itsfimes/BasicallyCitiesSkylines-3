@@ -1,3 +1,10 @@
+"""Core city simulation engine.
+
+This module advances world time, applies active/scenario events, routes and
+moves residents through the graph, and produces metrics/snapshots consumed by
+the REST and WebSocket API layer in citysim.server.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -130,12 +137,22 @@ class TrafficLight:
     offset_seconds: int = 0
 
     def is_green(self, sim_time_seconds: float, edge_source: str) -> bool:
+        """Determine if light phase currently allows movement through node.
+
+        Used by: CitySimulation._traffic_light_delay when converting edge travel
+        estimates into per-resident movement timing.
+        """
         cycle_position = (sim_time_seconds + self.offset_seconds) % self.phase_seconds
         green_seconds = self.phase_seconds * self.green_ratio
         return cycle_position < green_seconds
 
 
 def _as_int(value: Any, default: int) -> int:
+    """Coerce mixed payload values to int with safe fallback.
+
+    Used by: event application handlers for resilient parsing of event payload
+    fields that may come from external API clients.
+    """
     if isinstance(value, bool):
         return int(value)
     if isinstance(value, int):
@@ -157,6 +174,11 @@ def choose_transport_mode(
     available_modes: list[TransportMode],
     rng: SeededRandom,
 ) -> TransportMode:
+    """Choose a transport mode from distance/weather/congestion constraints.
+
+    Used by: population and mobility decision flows that need seeded but policy-
+    aware modal selection for resident trips.
+    """
     distance_km = distance_m / 1000.0
     candidates = list(available_modes)
     candidates = [m for m in candidates if distance_km <= MODE_MAX_DISTANCE_KM[m]]
@@ -216,6 +238,11 @@ class CitySimulation:
     max_metrics_history: int = 300
 
     def __post_init__(self) -> None:
+        """Initialize derived runtime caches and intersection traffic lights.
+
+        Used by: dataclass lifecycle during simulation construction in
+        citysim.factory before first step execution.
+        """
         self.base_speed_kph_by_edge = {edge_id: edge.base_speed_kph for edge_id, edge in self.graph.edges.items()}
         self.edge_speed_factor_by_edge = {edge_id: 1.0 for edge_id in self.graph.edges}
         for node_id in self.graph.nodes:
@@ -228,6 +255,11 @@ class CitySimulation:
                 )
 
     def step(self, delta_seconds: float = 60.0) -> SimulationMetrics:
+        """Advance simulation state by one tick and return current metrics.
+
+        Used by: background live ticking and manual stepping endpoints in
+        citysim.server to produce each new state snapshot.
+        """
         safe_delta_seconds = max(0.05, float(delta_seconds))
         self.sim_time_seconds += safe_delta_seconds
         self.minute = int(self.sim_time_seconds // 60)
@@ -259,10 +291,20 @@ class CitySimulation:
         return metrics
 
     def inject_event(self, event: SimulationEvent) -> None:
+        """Register a new active event and invalidate route cache.
+
+        Used by: SimulationRuntime.inject_event in citysim.server after request
+        payload validation.
+        """
         self.active_events.append(event)
         self.graph.invalidate_path_cache()
 
     def snapshot(self) -> dict[str, object]:
+        """Serialize full simulation state for API and WebSocket consumers.
+
+        Used by: /api/state responses and websocket tick broadcasts emitted by
+        SimulationRuntime in citysim.server.
+        """
         return {
             "minute": self.minute,
             "sim_time_seconds": round(self.sim_time_seconds, 3),
@@ -333,13 +375,25 @@ class CitySimulation:
         }
 
     def _hour_of_day(self) -> int:
+        """Convert simulation minute counter to hour-of-day bucket.
+
+        Used by: activity schedule lookup in _desired_activity.
+        """
         return int((self.minute // 60) % 24)
 
     def _desired_activity(self, resident: Resident) -> ActivityType:
+        """Resolve scheduled activity for resident profile at current time.
+
+        Used by: _advance_residents when deciding destination replanning needs.
+        """
         schedule = BEHAVIOR_SCHEDULES.get(resident.behavior_profile, BEHAVIOR_SCHEDULES["worker"])
         return schedule.get(self._hour_of_day(), "home")
 
     def _expire_events(self) -> None:
+        """Remove finished events and trigger rerouting cache refresh.
+
+        Used by: step at the start of each tick before applying active effects.
+        """
         still_active: list[SimulationEvent] = []
         for event in self.active_events:
             start_seconds = float(event.start_minute) * 60.0
@@ -351,6 +405,10 @@ class CitySimulation:
         self.active_events = still_active
 
     def _ingest_plugin_events(self) -> None:
+        """Pull newly scheduled events from scenario plugins once per minute.
+
+        Used by: step to merge plugin-driven incidents into active event set.
+        """
         if self.minute == self.last_plugin_minute:
             return
         for plugin in self.scenario_plugins:
@@ -361,6 +419,10 @@ class CitySimulation:
         self.last_plugin_minute = self.minute
 
     def _apply_edge_resets(self, delta_seconds: float) -> None:
+        """Decay transient edge effects and restore baseline speed settings.
+
+        Used by: step before active-event overlays are applied for this tick.
+        """
         decay_factor = max(0.75, min(0.995, 1.0 - delta_seconds * 0.015))
         for edge in self.graph.edges.values():
             edge.blocked = False
@@ -369,6 +431,11 @@ class CitySimulation:
             self.edge_speed_factor_by_edge[edge.edge_id] = 1.0
 
     def _apply_active_events(self, delta_seconds: float) -> None:
+        """Apply currently active event effects to roads and weather.
+
+        Used by: step to mutate congestion/blocking/speed/uncertainty before
+        resident movement and metric computation.
+        """
         self.weather = WeatherType.CLEAR
         weather_active = False
         minute_scale = max(0.05, delta_seconds / 60.0)
@@ -419,6 +486,10 @@ class CitySimulation:
             self.uncertainty_level = max(0.05, self.uncertainty_level * (1.0 - min(0.08, delta_seconds * 0.01)))
 
     def _traffic_light_delay(self, edge: Any, resident: Resident) -> float:
+        """Estimate waiting time induced by node traffic-light phase.
+
+        Used by: _advance_residents to augment edge travel duration per agent.
+        """
         light = self.traffic_lights.get(edge.source)
         if light is None:
             return 0.0
@@ -429,6 +500,10 @@ class CitySimulation:
         return 0.0
 
     def _advance_residents(self, delta_seconds: float) -> None:
+        """Advance resident movement state and perform route replanning.
+
+        Used by: step as the primary agent-based mobility update phase.
+        """
         building_ids = list(self.buildings.keys())
         if not building_ids:
             return
@@ -498,6 +573,11 @@ class CitySimulation:
             resident.tick_distance_m = (edge.distance_m / travel_seconds) * delta_seconds
 
     def _choose_destination_for_activity(self, resident: Resident, desired_activity: ActivityType) -> str:
+        """Pick a destination building matching desired activity heuristics.
+
+        Used by: _advance_residents when an agent has completed prior route and
+        needs a new target.
+        """
         activity = desired_activity
         if desired_activity == "home" and self.rng.float() < 0.08:
             other = ["work", "school", "leisure"]
@@ -518,16 +598,31 @@ class CitySimulation:
         return candidates[self.rng.randint(0, len(candidates) - 1)]
 
     def _choose_destination(self, resident: Resident) -> str:
+        """Compatibility helper that routes to profile-based destination choice.
+
+        Used by: internal and potential external callers that need destination
+        selection without directly passing desired activity.
+        """
         desired = self._desired_activity(resident)
         return self._choose_destination_for_activity(resident, desired)
 
     def _activity_for_target(self, building_id: str) -> ActivityType:
+        """Map a building id to its activity kind with home fallback.
+
+        Used by: _advance_residents to annotate current resident activity while
+        traversing route segments and upon arrival.
+        """
         building = self.buildings.get(building_id)
         if building is None:
             return "home"
         return building.kind
 
     def _compute_metrics(self, delta_seconds: float) -> SimulationMetrics:
+        """Compute aggregate KPI snapshot for current tick state.
+
+        Used by: step to produce metrics for logs, /api/state payload, and
+        frontend dashboards/sparklines.
+        """
         if self.graph.edges:
             traffic_density = sum(edge.congestion for edge in self.graph.edges.values()) / len(self.graph.edges)
         else:

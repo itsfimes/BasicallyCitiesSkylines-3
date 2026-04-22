@@ -1,3 +1,10 @@
+/**
+ * Three.js visualization layer for the city simulation dashboard.
+ *
+ * Converts backend graph/resident snapshots into 3D scene primitives, manages
+ * animation/interpolation, and renders roads, vehicles, incidents, and weather.
+ */
+
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -67,6 +74,10 @@ interface SceneState {
 let state: SceneState;
 let getInterpolationAlpha: () => number;
 
+/**
+ * Project geographic node coordinates into normalized scene space.
+ * Used by: updateScene() before road/building/vehicle mesh placement.
+ */
 function projectGraph(nodes: any[]): ProjectedNode[] {
   const xs = nodes.map((n: any) => n.x);
   const ys = nodes.map((n: any) => n.y);
@@ -81,12 +92,20 @@ function projectGraph(nodes: any[]): ProjectedNode[] {
   }));
 }
 
+/**
+ * Select road material variant from edge state.
+ * Used by: upsertRoads() when creating/updating road meshes per tick.
+ */
 function roadMaterial(edge: any, materials: SceneState["roadMaterials"]): THREE.MeshStandardMaterial {
   if (edge.blocked) return materials.blocked;
   if (edge.congestion > 20) return materials.congested;
   return materials.stable;
 }
 
+/**
+ * Evaluate quadratic Bézier point at interpolation parameter t.
+ * Used by: animateVehicles() for smooth per-frame vehicle positions.
+ */
 function computeCurvePoint(cp: THREE.Vector3[], t: number): THREE.Vector3 {
   const inv = 1 - t;
   return new THREE.Vector3(
@@ -96,6 +115,10 @@ function computeCurvePoint(cp: THREE.Vector3[], t: number): THREE.Vector3 {
   );
 }
 
+/**
+ * Evaluate normalized tangent on quadratic Bézier curve at t.
+ * Used by: animateVehicles() to orient vehicle meshes along movement path.
+ */
 function computeCurveTangent(cp: THREE.Vector3[], t: number): THREE.Vector3 {
   return new THREE.Vector3(
     2 * (1 - t) * (cp[1].x - cp[0].x) + 2 * t * (cp[2].x - cp[1].x),
@@ -104,6 +127,10 @@ function computeCurveTangent(cp: THREE.Vector3[], t: number): THREE.Vector3 {
   ).normalize();
 }
 
+/**
+ * Populate static building meshes around graph nodes.
+ * Used by: updateScene() when static graph signature changes.
+ */
 function addBuildings(nodes: ProjectedNode[], buildingsByNode: Map<string, string>) {
   const palette = [0x2a3550, 0x1e2d48, 0x243050, 0x2c3858, 0x1a2844, 0x263856];
   nodes.forEach((node, index) => {
@@ -134,6 +161,10 @@ function addBuildings(nodes: ProjectedNode[], buildingsByNode: Map<string, strin
   });
 }
 
+/**
+ * Add decorative park clusters to improve scene readability.
+ * Used by: updateScene() static-geometry rebuild path.
+ */
 function addParks(nodes: ProjectedNode[]) {
   nodes.forEach((node, index) => {
     if (index % 2 !== 0) return;
@@ -166,6 +197,10 @@ function addParks(nodes: ProjectedNode[]) {
   });
 }
 
+/**
+ * Add node hub towers scaled by local resident load.
+ * Used by: updateScene() static-geometry rebuild path.
+ */
 function addHubs(nodes: ProjectedNode[], residentsByNode: Map<string, number>) {
   nodes.forEach((node, index) => {
     const load = residentsByNode.get(node.node_id) || 0;
@@ -194,6 +229,10 @@ function addHubs(nodes: ProjectedNode[], residentsByNode: Map<string, number>) {
   });
 }
 
+/**
+ * Create/update/remove road meshes to mirror current edge set.
+ * Used by: updateScene() on every applied simulation snapshot.
+ */
 function upsertRoads(edges: any[], nodeById: Map<string, ProjectedNode>) {
   const seen = new Set<string>();
   edges.forEach((edge: any) => {
@@ -229,6 +268,10 @@ function upsertRoads(edges: any[], nodeById: Map<string, ProjectedNode>) {
   }
 }
 
+/**
+ * Render active-event alert markers in the 3D scene.
+ * Used by: updateScene() after roads are synchronized.
+ */
 function updateAlerts(events: any[], nodeById: Map<string, ProjectedNode>, edgeById: Map<string, any>) {
   state.alertsGroup.clear();
   events.forEach((event: any, index: number) => {
@@ -259,6 +302,10 @@ function updateAlerts(events: any[], nodeById: Map<string, ProjectedNode>, edgeB
   });
 }
 
+/**
+ * Upsert vehicle meshes from moving residents plus congestion placeholders.
+ * Used by: updateScene() to refresh animated traffic state.
+ */
 function addVehicles(
   residents: any[],
   edges: any[],
@@ -352,6 +399,10 @@ function addVehicles(
   state.vehicleMeshes = Array.from(state.vehicleMeshesByKey.values());
 }
 
+/**
+ * Apply weather lighting/background and rebuild precipitation particles.
+ * Used by: updateScene() to keep atmosphere synchronized with backend weather.
+ */
 function applyWeather(weather: string, sceneStateEl: HTMLElement) {
   const key = String(weather).toLowerCase();
   const preset = WEATHER_PRESETS[key] || WEATHER_PRESETS.clear;
@@ -381,6 +432,10 @@ function applyWeather(weather: string, sceneStateEl: HTMLElement) {
   }
 }
 
+/**
+ * Initialize Three.js scene, controls, and animation loop.
+ * Used by: frontend/src/main.ts at startup to create the 3D viewport.
+ */
 export function initScene(
   container: HTMLElement,
   alphaFn: () => number,
@@ -510,6 +565,10 @@ export function initScene(
     renderer.render(scene, camera);
   });
 
+  /**
+   * Animate vehicle meshes between simulation snapshots.
+   * Used by: initScene() render loop each animation frame.
+   */
   function animateVehicles() {
     const alpha = getInterpolationAlpha();
     state.vehicleMeshes.forEach((mesh) => {
@@ -526,6 +585,10 @@ export function initScene(
     });
   }
 
+  /**
+   * Animate precipitation particle system.
+   * Used by: initScene() render loop each animation frame.
+   */
   function animateWeather() {
     const time = performance.now() * 0.0012;
     state.weatherParticles.forEach((p, i) => {
@@ -539,6 +602,10 @@ export function initScene(
   return { state, updateScene, sceneStateEl, vehicleCountEl };
 }
 
+/**
+ * Apply snapshot state into 3D scene groups and return graph counters.
+ * Used by: frontend/src/main.ts applyState() after REST/WS updates.
+ */
 export function updateScene(
   graphData: any,
   residents: any[],

@@ -1,3 +1,10 @@
+/**
+ * Lightweight 2D mini-map renderer.
+ *
+ * Projects the same graph/resident state used by the 3D scene into a compact
+ * canvas overview for quick situational awareness in the dashboard.
+ */
+
 interface MiniMapState {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -7,6 +14,10 @@ interface MiniMapState {
 
 let mmState: MiniMapState | null = null;
 
+/**
+ * Create and size mini-map canvas within target container.
+ * Used by: frontend/src/main.ts during startup bootstrap.
+ */
 export function initMiniMap(container: HTMLElement): void {
   const canvas = document.createElement("canvas");
   canvas.className = "mini-map-canvas";
@@ -43,6 +54,10 @@ interface MovingResident {
   current_node_id: string;
 }
 
+/**
+ * Draw latest graph and moving-resident overlay to mini-map canvas.
+ * Used by: frontend/src/main.ts renderOverview() on each applied snapshot.
+ */
 export function renderMiniMap(
   nodes: GraphNode[],
   edges: GraphEdge[],

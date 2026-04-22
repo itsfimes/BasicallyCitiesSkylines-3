@@ -1,3 +1,10 @@
+/**
+ * Frontend transport layer for REST requests and live WebSocket ticks.
+ *
+ * Main UI code uses this client to fetch snapshots, mutate runtime state, and
+ * subscribe to server-pushed updates with automatic reconnect behavior.
+ */
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export class ApiClient {
@@ -7,6 +14,11 @@ export class ApiClient {
   private reconnectAttempts = 0;
   private maxReconnectDelay = 10000;
 
+  /**
+   * Execute a JSON REST request against backend API base URL.
+   * Used by: frontend/src/main.ts for state fetches, runtime control updates,
+   * reset actions, and event injection.
+   */
   async request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
     const response = await fetch(`${API_BASE}${path}`, {
       ...options,
@@ -22,6 +34,11 @@ export class ApiClient {
     return data;
   }
 
+  /**
+   * Open realtime websocket stream with reconnect handling.
+   * Used by: frontend/src/main.ts after initial bootstrap to receive tick
+   * snapshots from backend /ws/state.
+   */
   connectWebSocket() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
@@ -58,6 +75,10 @@ export class ApiClient {
     }
   }
 
+  /**
+   * Schedule exponential-backoff websocket reconnect attempt.
+   * Used by: connectWebSocket close/error paths to keep realtime feed alive.
+   */
   private scheduleReconnect() {
     if (this.reconnectTimer) return;
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), this.maxReconnectDelay);
@@ -68,11 +89,19 @@ export class ApiClient {
     }, delay);
   }
 
+  /**
+   * Register a listener for parsed websocket messages.
+   * Used by: frontend/src/main.ts to apply incoming `tick` payload updates.
+   */
   onMessage(listener: (data: any) => void) {
     this.wsListeners.add(listener);
     return () => this.wsListeners.delete(listener);
   }
 
+  /**
+   * Close websocket and cancel pending reconnect timers.
+   * Used by: lifecycle/cleanup flows where realtime stream should stop.
+   */
   disconnect() {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

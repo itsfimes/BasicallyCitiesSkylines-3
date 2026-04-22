@@ -1,3 +1,11 @@
+/**
+ * Frontend application orchestrator.
+ *
+ * Wires UI controls with API/WebSocket data flow, applies simulation snapshots,
+ * updates dashboard widgets, and delegates rendering to scene/minimap/sparkline
+ * modules.
+ */
+
 import { api } from "./api.ts";
 import { formatNumber, formatSimTime, titleCase } from "./utils.ts";
 import { toast } from "./toast.ts";
@@ -102,6 +110,11 @@ initMiniMap(document.getElementById("miniMap")!);
 
 const sceneRef = initScene(els.map, getInterpolationAlpha, els.sceneState, els.vehicleCount);
 
+/**
+ * Compute interpolation alpha between latest two simulation snapshots.
+ * Used by: frontend/src/scene.ts animation loop to smooth vehicle positions
+ * between websocket/API state arrivals.
+ */
 function getInterpolationAlpha(): number {
   if (interpolation.prevTime == null || interpolation.currTime == null) return 1;
   const simDelta = interpolation.currTime - interpolation.prevTime;
@@ -115,6 +128,10 @@ function getInterpolationAlpha(): number {
   return Math.min(1, elapsed / arrivalDelta);
 }
 
+/**
+ * Shift interpolation anchors when a newer snapshot arrives.
+ * Used by: refresh() and websocket tick handler before applyState().
+ */
 function markSnapshot(timeSec: number) {
   const now = performance.now();
   if (interpolation.currTime != null) {
@@ -129,6 +146,10 @@ function markSnapshot(timeSec: number) {
   }
 }
 
+/**
+ * Derive a qualitative network label from congestion/event state.
+ * Used by: renderOverview() dashboard summary card.
+ */
 function describeNetworkMood(state: any): string {
   const blocked = state.graph?.edges?.filter((e: any) => e.blocked).length || 0;
   const density = Number(state.last_metrics?.traffic_density || 0);
@@ -139,6 +160,10 @@ function describeNetworkMood(state: any): string {
   return "Steady traffic flow";
 }
 
+/**
+ * Render KPI values and update in-memory sparkline history.
+ * Used by: applyState() whenever backend metrics are present.
+ */
 function renderMetrics(m: any) {
   if (!m) return;
   els.trafficDensity.textContent = formatNumber(m.traffic_density);
@@ -163,6 +188,10 @@ function renderMetrics(m: any) {
   drawSparkline(sparklineCanvases.energy, metricsHistory.energy, "rgb(16, 185, 129)");
 }
 
+/**
+ * Render active incident chips in the right-side events panel.
+ * Used by: renderOverview() after each applied snapshot.
+ */
 function renderActiveEvents(events: any[]) {
   els.eventCountBadge.textContent = `${events.length} live`;
   while (els.activeEvents.firstChild) els.activeEvents.removeChild(els.activeEvents.firstChild);
@@ -190,6 +219,10 @@ function renderActiveEvents(events: any[]) {
   }
 }
 
+/**
+ * Render overview counters, weather/time labels, and minimap source state.
+ * Used by: applyState() as primary UI update pass for each snapshot.
+ */
 function renderOverview(state: any) {
   const residents = state.residents || [];
   const summary = state.resident_summary;
@@ -216,6 +249,10 @@ function renderOverview(state: any) {
   );
 }
 
+/**
+ * Apply one backend snapshot to all frontend render targets.
+ * Used by: refresh() pull updates and websocket tick push updates.
+ */
 function applyState(state: any) {
   renderOverview(state);
   if (state.last_metrics) renderMetrics(state.last_metrics);
@@ -239,6 +276,10 @@ function applyState(state: any) {
   }
 }
 
+/**
+ * Resolve selectable target values for current event payload type.
+ * Used by: populateTargetSelect() to build event form options.
+ */
 function getTargetOptions(config: typeof EVENT_PAYLOAD_CONFIG[string]): string[] {
   if (config.source === "nodes") return incidentState.nodes;
   if (config.source === "edges") return incidentState.edges;
@@ -246,6 +287,10 @@ function getTargetOptions(config: typeof EVENT_PAYLOAD_CONFIG[string]): string[]
   return [];
 }
 
+/**
+ * Populate payload target select based on event-type configuration.
+ * Used by: updateEventHints() when event type or graph options change.
+ */
 function populateTargetSelect(config: typeof EVENT_PAYLOAD_CONFIG[string]) {
   payloadTargetEl.innerHTML = "";
   if (config.source === "none") {
@@ -277,6 +322,10 @@ function populateTargetSelect(config: typeof EVENT_PAYLOAD_CONFIG[string]) {
   }
 }
 
+/**
+ * Refresh event form helper text and target selector accessibility label.
+ * Used by: event type change handler and overview refresh pipeline.
+ */
 function updateEventHints() {
   const config = EVENT_PAYLOAD_CONFIG[eventTypeEl.value] || EVENT_PAYLOAD_CONFIG.outage;
   populateTargetSelect(config);
@@ -285,11 +334,20 @@ function updateEventHints() {
   eventHintEl.textContent = config.source === "none" ? config.hint : `${config.hint} ${config.targetLabel} options: ${count}.`;
 }
 
+/**
+ * Set status banner text and UI state marker.
+ * Used by: runtime sync, refresh success/failure, and control actions.
+ */
 function setStatus(message: string, state = "idle") {
   els.statusMessage.textContent = message;
   els.statusMessage.dataset.state = state;
 }
 
+/**
+ * Pull full state snapshot from REST and apply if it is not stale.
+ * Used by: startup bootstrap, post-action refreshes, and fallback syncing when
+ * websocket ticks are not sufficient.
+ */
 async function refresh(successMessage = "Live data synchronized.") {
   try {
     const data = await api.request("/api/state");
@@ -314,6 +372,10 @@ async function refresh(successMessage = "Live data synchronized.") {
   }
 }
 
+/**
+ * Push live-mode and speed settings to backend runtime.
+ * Used by: live toggle and speed selector handlers.
+ */
 async function syncRuntime() {
   try {
     const data = await api.request("/api/runtime", {
@@ -329,6 +391,10 @@ async function syncRuntime() {
   }
 }
 
+/**
+ * Fetch backend runtime status and initialize control defaults.
+ * Used by: startup flow before first refresh/connectWebSocket.
+ */
 async function initializeRuntime() {
   try {
     const data = await api.request("/api/runtime");

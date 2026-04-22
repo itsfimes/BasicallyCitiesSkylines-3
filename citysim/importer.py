@@ -1,3 +1,10 @@
+"""City data import adapters.
+
+Provides JSON dataset loading and OSM Overpass ingestion, normalizing external
+data into ImportedCityData so factory/build code can create a simulation from
+either static files or live map extraction.
+"""
+
 from __future__ import annotations
 
 import json
@@ -18,6 +25,11 @@ class ImportedCityData:
 
 
 def import_from_json(path: str) -> ImportedCityData:
+    """Load a city graph/building dataset from project JSON format.
+
+    Used by: citysim.factory.load_default_city and any file-driven import path
+    that needs normalized in-memory graph/building objects.
+    """
     with open(path, encoding="utf-8") as file:
         payload = json.load(file)
 
@@ -56,6 +68,11 @@ def import_from_json(path: str) -> ImportedCityData:
 
 
 def import_osm_overpass_bbox(south: float, west: float, north: float, east: float) -> ImportedCityData:
+    """Fetch OSM data for a bounding box and convert it into simulation data.
+
+    Used by: citysim.server SimulationRuntime.import_osm_bbox endpoint flow to
+    replace active simulation topology from Overpass results.
+    """
     overpass_query = f"""
     [out:json][timeout:25];
     (
@@ -144,6 +161,10 @@ def import_osm_overpass_bbox(south: float, west: float, north: float, east: floa
 
 
 def _parse_osm_speed(maxspeed: object) -> float:
+    """Parse OSM maxspeed tag into kilometers per hour.
+
+    Used by: import_osm_overpass_bbox while materializing Edge.base_speed_kph.
+    """
     speed_text = str(maxspeed)
     digits = "".join(ch for ch in speed_text if ch.isdigit())
     if not digits:
@@ -155,6 +176,11 @@ def _parse_osm_speed(maxspeed: object) -> float:
 
 
 def _infer_quality(tags: object) -> float:
+    """Infer coarse road quality factor from OSM highway category.
+
+    Used by: import_osm_overpass_bbox to initialize edge quality, which later
+    influences travel-time calculations in citysim.graph.
+    """
     if not isinstance(tags, dict):
         return 1.0
     highway = str(tags.get("highway", ""))
@@ -166,6 +192,11 @@ def _infer_quality(tags: object) -> float:
 
 
 def _approx_distance_m(first: Node, second: Node) -> float:
+    """Approximate geographic distance between two lon/lat nodes in meters.
+
+    Used by: OSM import edge construction to derive simulation distances from
+    coordinate geometry.
+    """
     lat_scale = 111_320.0
     mean_lat = (first.y + second.y) / 2.0
     lon_scale = 111_320.0 * max(0.1, math.cos(math.radians(mean_lat)))
@@ -175,6 +206,11 @@ def _approx_distance_m(first: Node, second: Node) -> float:
 
 
 def _synthetic_buildings_from_nodes(nodes: dict[str, Node]) -> dict[str, Building]:
+    """Create fallback buildings when OSM lacks sufficient POI coverage.
+
+    Used by: OSM import pipeline to guarantee at least home/work/school/leisure
+    capacity for resident generation in citysim.factory.
+    """
     buildings: dict[str, Building] = {}
     node_ids = list(nodes.keys())
     if not node_ids:
@@ -217,6 +253,11 @@ OFFICE_KEYWORDS = {"office", "government", "company"}
 
 
 def _extract_poi_buildings(elements: list[dict[str, Any]], nodes: dict[str, Node]) -> dict[str, Building]:
+    """Extract building roles from amenity/office/shop OSM node tags.
+
+    Used by: OSM import pipeline to map POIs into simulation activity types for
+    routing and daily target assignment.
+    """
     buildings: dict[str, Building] = {}
     counter = 0
     for element in elements:

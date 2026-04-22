@@ -1,3 +1,14 @@
+/**
+ * Metric sparkline rendering helpers.
+ *
+ * Main UI uses these utilities to draw compact rolling trend charts for core
+ * simulation KPIs (density, delay, emissions, energy).
+ */
+
+/**
+ * Draw one metric sparkline into the provided canvas.
+ * Used by: frontend/src/main.ts renderMetrics() for KPI trend cards.
+ */
 export function drawSparkline(
   canvas: HTMLCanvasElement,
   data: number[],
@@ -45,6 +56,10 @@ export function drawSparkline(
   ctx.fill();
 }
 
+/**
+ * Create pre-styled sparkline canvas element.
+ * Used by: frontend/src/main.ts during card bootstrap before first metrics.
+ */
 export function createSparklineCanvas(): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.className = "sparkline-canvas";
