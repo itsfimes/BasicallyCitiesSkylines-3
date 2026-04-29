@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager, suppress
 from typing import Any
 
@@ -78,6 +79,12 @@ class SimulationRuntime:
         self.running = True
         self.tick_seconds = 1.0
         self._subscribers: list[asyncio.Queue[dict[str, Any]]] = []
+        self._run_id = 1
+        self._tick_id = 0
+        self._last_tick_mono: float | None = None
+
+    def _speed_multiplier(self) -> float:
+        return round(max(0.1, 1.0 / max(0.05, self.tick_seconds)), 3)
 
     def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
         """Register a websocket subscriber queue for tick broadcasts.
@@ -117,6 +124,9 @@ class SimulationRuntime:
         """
         async with self.lock:
             self.simulation = build_simulation(seed=seed, resident_count=resident_count)
+            self._run_id += 1
+            self._tick_id = 0
+            self._last_tick_mono = None
         logger.info("Simulation reset: seed=%d, residents=%d", seed, resident_count)
 
     async def step(self, count: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -149,10 +159,31 @@ class SimulationRuntime:
         """
         async with self.lock:
             if not self.running:
+                self._last_tick_mono = None
                 return False
-            self.simulation.step(delta_seconds=self.tick_seconds)
-        state = self.snapshot()
-        await self.broadcast({"type": "tick", "state": state})
+            now = time.perf_counter()
+            if self._last_tick_mono is None:
+                wall_delta_seconds = self.tick_seconds
+            else:
+                wall_delta_seconds = max(0.0, now - self._last_tick_mono)
+            self._last_tick_mono = now
+            speed_multiplier = self._speed_multiplier()
+            sim_delta_seconds = max(0.05, wall_delta_seconds * speed_multiplier)
+            self.simulation.step(delta_seconds=sim_delta_seconds)
+            state = self.simulation.snapshot()
+            self._tick_id += 1
+            tick_payload = {
+                "type": "tick",
+                "state": state,
+                "run_id": self._run_id,
+                "tick_id": self._tick_id,
+                "timing": {
+                    "sim_time_seconds": state.get("sim_time_seconds"),
+                    "sim_delta_seconds": round(sim_delta_seconds, 3),
+                    "speed_multiplier": speed_multiplier,
+                },
+            }
+        await self.broadcast(tick_payload)
         return True
 
     def snapshot(self) -> dict[str, Any]:
@@ -254,11 +285,13 @@ class SimulationRuntime:
 
         Used by: GET /api/runtime and control synchronization in frontend/main.
         """
-        speed_multiplier = round(max(0.1, 1.0 / max(0.05, self.tick_seconds)), 3)
+        speed_multiplier = self._speed_multiplier()
         return {
             "running": self.running,
             "tick_seconds": self.tick_seconds,
             "speed_multiplier": speed_multiplier,
+            "run_id": self._run_id,
+            "tick_id": self._tick_id,
         }
 
     async def force_step(self, count: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -292,14 +325,18 @@ class SimulationRuntime:
         async with self.lock:
             if running is not None:
                 self.running = bool(running)
+                self._last_tick_mono = None
             if speed_multiplier is not None:
                 safe_speed = max(0.25, min(20.0, float(speed_multiplier)))
                 self.tick_seconds = max(0.05, 1.0 / safe_speed)
-            speed_multiplier_value = round(max(0.1, 1.0 / max(0.05, self.tick_seconds)), 3)
+                self._last_tick_mono = None
+            speed_multiplier_value = self._speed_multiplier()
             return {
                 "running": self.running,
                 "tick_seconds": self.tick_seconds,
                 "speed_multiplier": speed_multiplier_value,
+                "run_id": self._run_id,
+                "tick_id": self._tick_id,
             }
 
     async def import_osm_bbox(
@@ -312,6 +349,9 @@ class SimulationRuntime:
         imported = import_osm_overpass_bbox(south=south, west=west, north=north, east=east)
         async with self.lock:
             self.simulation = build_simulation_from_import(imported, seed=seed, resident_count=resident_count)
+            self._run_id += 1
+            self._tick_id = 0
+            self._last_tick_mono = None
         logger.info("OSM import complete: bbox(%.4f,%.4f,%.4f,%.4f)", south, west, north, east)
 
 
@@ -374,7 +414,18 @@ async def get_state():
 
     Used by: frontend initial refresh and periodic pull fallback.
     """
-    return {"state": runtime.snapshot()}
+    state = runtime.snapshot()
+    rt = runtime.runtime_status()
+    return {
+        "state": state,
+        "run_id": rt["run_id"],
+        "tick_id": rt["tick_id"],
+        "timing": {
+            "sim_time_seconds": state.get("sim_time_seconds"),
+            "sim_delta_seconds": None,
+            "speed_multiplier": rt["speed_multiplier"],
+        },
+    }
 
 
 @app.get("/api/state/summary")

@@ -1,8 +1,10 @@
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from citysim.factory import build_simulation
 from citysim.importer import import_from_json
+from citysim.server import SimulationRuntime
 from citysim.types import Edge, SimulationEvent, WeatherType
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -322,6 +324,50 @@ class SimulationTests(unittest.TestCase):
         sim.step(delta_seconds=60.0)
         after = sum(e.congestion for e in sim.graph.edges.values())
         self.assertGreater(after, before)
+
+    def test_runtime_speed_multiplier_scales_sim_time_rate(self) -> None:
+        runtime = SimulationRuntime()
+        runtime.running = True
+        runtime.tick_seconds = 0.5
+
+        with patch("citysim.server.time.perf_counter", side_effect=[100.0, 100.5]):
+            self.assertTrue(self._run_async(runtime.advance_background_tick()))
+            self.assertTrue(self._run_async(runtime.advance_background_tick()))
+
+        self.assertEqual(runtime.simulation.sim_time_seconds, 2.0)
+
+    def test_runtime_tick_payload_contains_timing_metadata(self) -> None:
+        runtime = SimulationRuntime()
+        runtime.running = True
+        runtime.tick_seconds = 1.0
+        queue = runtime.subscribe()
+        try:
+            with patch("citysim.server.time.perf_counter", side_effect=[200.0, 201.0]):
+                self.assertTrue(self._run_async(runtime.advance_background_tick()))
+                self.assertTrue(self._run_async(runtime.advance_background_tick()))
+
+            first = self._run_async(queue.get())
+            second = self._run_async(queue.get())
+            self.assertEqual(first.get("type"), "tick")
+            self.assertEqual(second.get("type"), "tick")
+            self.assertEqual(first.get("run_id"), 1)
+            self.assertEqual(second.get("run_id"), 1)
+            self.assertEqual(first.get("tick_id"), 1)
+            self.assertEqual(second.get("tick_id"), 2)
+            self.assertIn("timing", second)
+            timing = second["timing"]
+            self.assertIn("sim_delta_seconds", timing)
+            self.assertIn("speed_multiplier", timing)
+            self.assertEqual(timing["speed_multiplier"], 1.0)
+            self.assertEqual(timing["sim_delta_seconds"], 1.0)
+        finally:
+            runtime.unsubscribe(queue)
+
+    @staticmethod
+    def _run_async(coro):
+        import asyncio
+
+        return asyncio.run(coro)
 
 
 if __name__ == "__main__":
