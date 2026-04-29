@@ -74,7 +74,7 @@ def main() -> None:
     )
 
     frontend_proc = subprocess.Popen(
-        [npm_bin, "run", "dev"],
+        [npm_bin, "run", "dev", "--", "--host"],
         cwd=frontend_dir,
     )
 
