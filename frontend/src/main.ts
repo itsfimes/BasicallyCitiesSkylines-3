@@ -75,9 +75,15 @@ const interpolation = {
   currTime: null as number | null,
   prevAt: null as number | null,
   currAt: null as number | null,
+  prevSimDelta: null as number | null,
+  currSimDelta: null as number | null,
+  prevSpeed: null as number | null,
+  currSpeed: null as number | null,
 };
 
 let lastAppliedTime = -1;
+let lastAppliedTickId = -1;
+let lastRunId = 0;
 let liveRunning = false;
 
 const metricsHistory = {
@@ -121,8 +127,9 @@ function getInterpolationAlpha(): number {
   if (simDelta <= 0) return 1;
   const prevAt = interpolation.prevAt ?? interpolation.currAt ?? performance.now();
   const currAt = interpolation.currAt ?? prevAt;
-  const speed = Number(els.liveSpeed.value || 1);
-  const expectedMs = Math.max(80, Math.round(1000 / speed)) * simDelta;
+  const speed = interpolation.currSpeed ?? interpolation.prevSpeed ?? Number(els.liveSpeed.value || 1);
+  const deltaFromTiming = interpolation.currSimDelta ?? simDelta;
+  const expectedMs = (1000 * Math.max(0.05, deltaFromTiming)) / Math.max(0.25, speed);
   const arrivalDelta = Math.max(expectedMs, (currAt as number) - (prevAt as number));
   const elapsed = Math.max(0, performance.now() - (currAt as number));
   return Math.min(1, elapsed / arrivalDelta);
@@ -132,17 +139,25 @@ function getInterpolationAlpha(): number {
  * Shift interpolation anchors when a newer snapshot arrives.
  * Used by: refresh() and websocket tick handler before applyState().
  */
-function markSnapshot(timeSec: number) {
+function markSnapshot(timeSec: number, timing?: { sim_delta_seconds?: number; speed_multiplier?: number } | null) {
   const now = performance.now();
   if (interpolation.currTime != null) {
     interpolation.prevTime = interpolation.currTime;
     interpolation.prevAt = interpolation.currAt;
+    interpolation.prevSimDelta = interpolation.currSimDelta;
+    interpolation.prevSpeed = interpolation.currSpeed;
   }
   interpolation.currTime = timeSec;
   interpolation.currAt = now;
+  const timingDelta = Number(timing?.sim_delta_seconds ?? NaN);
+  interpolation.currSimDelta = Number.isFinite(timingDelta) && timingDelta > 0 ? timingDelta : null;
+  const timingSpeed = Number(timing?.speed_multiplier ?? NaN);
+  interpolation.currSpeed = Number.isFinite(timingSpeed) && timingSpeed > 0 ? timingSpeed : null;
   if (interpolation.prevTime == null || timeSec < interpolation.prevTime) {
     interpolation.prevTime = timeSec;
     interpolation.prevAt = now;
+    interpolation.prevSimDelta = interpolation.currSimDelta;
+    interpolation.prevSpeed = interpolation.currSpeed;
   }
 }
 
@@ -352,17 +367,41 @@ async function refresh(successMessage = "Live data synchronized.") {
   try {
     const data = await api.request("/api/state");
     const nextTime = Number(data.state?.sim_time_seconds ?? -1);
+    const nextRunId = Number(data.run_id ?? lastRunId);
+    const nextTickId = Number(data.tick_id ?? lastAppliedTickId);
+    if (Number.isFinite(nextRunId) && nextRunId !== lastRunId) {
+      interpolation.prevTime = null;
+      interpolation.currTime = null;
+      interpolation.prevAt = null;
+      interpolation.currAt = null;
+      interpolation.prevSimDelta = null;
+      interpolation.currSimDelta = null;
+      interpolation.prevSpeed = null;
+      interpolation.currSpeed = null;
+      lastAppliedTime = -1;
+      lastAppliedTickId = -1;
+      lastRunId = nextRunId;
+    }
     if (Number.isFinite(nextTime) && nextTime < lastAppliedTime) {
       interpolation.prevTime = null;
       interpolation.currTime = null;
       interpolation.prevAt = null;
       interpolation.currAt = null;
+      interpolation.prevSimDelta = null;
+      interpolation.currSimDelta = null;
+      interpolation.prevSpeed = null;
+      interpolation.currSpeed = null;
       lastAppliedTime = -1;
+      lastAppliedTickId = -1;
     }
-    if (Number.isFinite(nextTime) && nextTime >= lastAppliedTime) {
-      markSnapshot(nextTime);
+    const tickMonotonic = !Number.isFinite(nextTickId) || nextTickId >= lastAppliedTickId;
+    if (Number.isFinite(nextTime) && nextTime >= lastAppliedTime && tickMonotonic) {
+      markSnapshot(nextTime, data.timing);
       applyState(data.state);
       lastAppliedTime = nextTime;
+      if (Number.isFinite(nextTickId)) {
+        lastAppliedTickId = nextTickId;
+      }
     }
     if (successMessage) {
       setStatus(successMessage, "ok");
@@ -403,6 +442,14 @@ async function initializeRuntime() {
     const speed = Number(rt.speed_multiplier || 1);
     if (Number.isFinite(speed) && speed > 0) {
       els.liveSpeed.value = String(Math.min(10, Math.max(1, Math.round(speed))));
+    }
+    const runId = Number(rt.run_id ?? NaN);
+    if (Number.isFinite(runId)) {
+      lastRunId = runId;
+    }
+    const tickId = Number(rt.tick_id ?? NaN);
+    if (Number.isFinite(tickId)) {
+      lastAppliedTickId = tickId;
     }
     els.liveToggle.textContent = liveRunning ? "Pause Live" : "Resume Live";
   } catch {
@@ -483,10 +530,29 @@ els.eventForm.addEventListener("submit", async (event) => {
 api.onMessage((data) => {
   if (data.type === "tick" && data.state) {
     const nextTime = Number(data.state.sim_time_seconds ?? -1);
-    if (Number.isFinite(nextTime) && nextTime >= lastAppliedTime) {
-      markSnapshot(nextTime);
+    const nextRunId = Number(data.run_id ?? NaN);
+    if (Number.isFinite(nextRunId) && nextRunId !== lastRunId) {
+      lastRunId = nextRunId;
+      lastAppliedTime = -1;
+      lastAppliedTickId = -1;
+      interpolation.prevTime = null;
+      interpolation.currTime = null;
+      interpolation.prevAt = null;
+      interpolation.currAt = null;
+      interpolation.prevSimDelta = null;
+      interpolation.currSimDelta = null;
+      interpolation.prevSpeed = null;
+      interpolation.currSpeed = null;
+    }
+    const tickId = Number(data.tick_id ?? NaN);
+    const tickMonotonic = !Number.isFinite(tickId) || tickId > lastAppliedTickId;
+    if (Number.isFinite(nextTime) && nextTime >= lastAppliedTime && tickMonotonic) {
+      markSnapshot(nextTime, data.timing);
       applyState(data.state);
       lastAppliedTime = nextTime;
+      if (Number.isFinite(tickId)) {
+        lastAppliedTickId = tickId;
+      }
     }
   }
 });
